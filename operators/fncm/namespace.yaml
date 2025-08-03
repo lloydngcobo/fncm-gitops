@@ -5,10 +5,5 @@ metadata:
   labels:
     app: fncm
     managed-by: openshift-gitops
----
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: fncm
-  labels:
-    managed-by: openshift-gitops
+    openshift.io/cluster-monitoring: "true"
+EOF
