@@ -7,7 +7,7 @@ metadata:
     app: fncm
     managed-by: openshift-gitops
 spec:
-  channel: v1.0
+  channel: v25.0
   name: ibm-fncm-operator
   source: ibm-operator-catalog
   sourceNamespace: openshift-marketplace
