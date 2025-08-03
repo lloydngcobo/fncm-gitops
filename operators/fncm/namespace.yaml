@@ -6,4 +6,3 @@ metadata:
     app: fncm
     managed-by: openshift-gitops
     openshift.io/cluster-monitoring: "true"
-EOF
