@@ -9,6 +9,6 @@ metadata:
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: openshift-operators
+  name: fncm
   labels:
     managed-by: openshift-gitops

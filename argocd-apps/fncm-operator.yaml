@@ -13,6 +13,7 @@ spec:
     path: operators/fncm
   destination:
     server: https://kubernetes.default.svc
+    namespace: fncm
   syncPolicy:
     automated:
       prune: true
