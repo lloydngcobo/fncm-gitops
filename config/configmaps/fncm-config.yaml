@@ -5,7 +5,7 @@ metadata:
   namespace: fncm
   labels:
     app: fncm
-    managed-by: argocd
+    managed-by: openshift-gitops
 data:
   install.properties: |
     # FileNet Installation Configuration

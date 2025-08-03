@@ -4,11 +4,11 @@ metadata:
   name: fncm
   labels:
     app: fncm
-    managed-by: argocd
+    managed-by: openshift-gitops
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: openshift-operators
   labels:
-    managed-by: argocd
+    managed-by: openshift-gitops

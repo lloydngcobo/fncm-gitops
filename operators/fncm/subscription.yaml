@@ -5,7 +5,7 @@ metadata:
   namespace: openshift-operators
   labels:
     app: fncm
-    managed-by: argocd
+    managed-by: openshift-gitops
 spec:
   channel: v1.0
   name: ibm-fncm-operator
