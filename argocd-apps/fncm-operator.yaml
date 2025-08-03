@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: fncm-operator
+  namespace: argocd
+  labels:
+    app: fncm
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/lloydngcobo/fncm-gitops # Replace with your repo
+    targetRevision: HEAD
+    path: operators/fncm
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+    - ApplyOutOfSyncOnly=true
+  ignoreDifferences:
+  - group: operators.coreos.com
+    kind: Subscription
+    jsonPointers:
+    - /status

@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fncm-install-config
+  namespace: fncm
+  labels:
+    app: fncm
+    managed-by: argocd
+data:
+  install.properties: |
+    # FileNet Installation Configuration
+    filenet.version=5.6.0
+    filenet.namespace=fncm
+    
+    # External Services
+    database.external=true
+    ldap.external=true
+    
+    # Storage Configuration
+    storage.class=managed-nfs-storage
+    storage.size.logs=10Gi
+    storage.size.content=50Gi
+    
+    # Component Selection
+    install.ce=true
+    install.pe=true
+    install.icn=true
+    install.ier=true

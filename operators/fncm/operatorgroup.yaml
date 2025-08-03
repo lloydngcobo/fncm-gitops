@@ -1,0 +1,9 @@
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: fncm-operator-group
+  namespace: openshift-operators
+spec:
+  targetNamespaces:
+  - fncm
+  - openshift-operators

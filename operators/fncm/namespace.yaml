@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fncm
+  labels:
+    app: fncm
+    managed-by: argocd
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openshift-operators
+  labels:
+    managed-by: argocd
