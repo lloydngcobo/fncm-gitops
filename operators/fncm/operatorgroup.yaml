@@ -6,4 +6,3 @@ metadata:
 spec:
   targetNamespaces:
   - fncm
-  - openshift-operators
