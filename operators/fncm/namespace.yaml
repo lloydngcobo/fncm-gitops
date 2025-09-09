@@ -1,1 +1,9 @@
 # Placeholder for fncm-gitops/operators/fncm/namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fncm
+  labels:
+    app: fncm
+    managed-by: openshift-gitops
+    openshift.io/cluster-monitoring: "true"
