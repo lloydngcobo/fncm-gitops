@@ -1,0 +1,60 @@
+kind: Pod
+apiVersion: v1
+metadata:
+  name: install
+  namespace: fncm-install
+  labels:
+    app: fncm-install
+spec:
+  containers:
+    - name: install
+      securityContext:
+        privileged: true
+      image: ubi9/ubi:9.3
+      command: ["/bin/bash"]
+      args:
+        ["-c","cd /usr;
+          yum install podman ncurses jq python3.9 python3.9-pip git -y;
+          curl -LO https://github.com/ibmruntimes/semeru17-binaries/releases/download/jdk-17.0.9%2B9_openj9-0.41.0/ibm-semeru-open-jdk_x64_linux_17.0.9_9_openj9-0.41.0.tar.gz;
+          tar -xvf ibm-semeru-open-jdk_x64_linux_17.0.9_9_openj9-0.41.0.tar.gz;
+          ln -fs /usr/jdk-17.0.9+9/bin/java /usr/bin/java;
+          ln -fs /usr/jdk-17.0.9+9/bin/keytool /usr/bin/keytool;
+          curl -k https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux.tar.gz --output oc.tar;
+          tar -xvf oc.tar oc;
+          chmod u+x oc;
+          ln -fs /usr/oc /usr/bin/oc;
+          curl -LO https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl;
+          chmod u+x kubectl;
+          ln -fs /usr/kubectl /usr/bin/kubectl;
+          curl -LO https://github.com/mikefarah/yq/releases/download/v4.30.5/yq_linux_amd64.tar.gz;
+          tar -xzvf yq_linux_amd64.tar.gz;
+          ln -fs /usr/yq_linux_amd64 /usr/bin/yq;
+
+          # Install Python packages using pip
+          pip3 install typer~=0.15.1 rich~=13.9.4 kubernetes==32.0.1 toml~=0.10.2 requests~=2.32.3 xmltodict~=0.14.2 PyYAML~=6.0.2 tomlkit~=0.13.2 cryptography~=44.0.1 docker~=7.1.0 urllib3~=2.2.3 pyOpenSSL~=25.0.0 Jinja2~=3.1.6 packaging~=24.2 ruamel.yaml==0.18.10;
+
+          # Clone the repository
+          git clone https://github.com/ibm-ecm/container-samples.git /usr/install/container-samples;
+
+          podman -v;
+          java -version;
+          keytool;
+          oc version;
+          kubectl version;
+          yq --version;
+          jq --version;
+          python3 --version;
+          pip3 --version;
+          git --version;
+
+          while true; 
+          do echo 'Install pod - Ready - Enter it via Terminal and "bash"'; 
+          sleep 300; done"]
+      imagePullPolicy: IfNotPresent
+      volumeMounts:
+        - name: install
+          mountPath: /usr/install
+  volumes:
+    - name: install
+      persistentVolumeClaim:
+        claimName: install

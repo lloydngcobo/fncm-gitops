@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: fncm-openldap
+  namespace: openshift-gitop
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/your-org/fncm-gitops.git'
+    targetRevision: HEAD
+    path: openldap
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: fncm-openldap
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

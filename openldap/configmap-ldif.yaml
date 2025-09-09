@@ -1,0 +1,74 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: openldap-customldif
+  namespace: fncm-openldap
+  labels:
+    app: fncm-openldap
+data:
+  01-sds-schema.ldif: |-
+    dn: cn=sds,cn=schema,cn=config
+    objectClass: olcSchemaConfig
+    cn: sds
+    olcAttributeTypes: {0}( 1.3.6.1.4.1.42.2.27.4.1.6 NAME 'ibm-entryUuid' DESC 
+      'Uniquely identifies a directory entry throughout its life.' EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+    olcObjectClasses: {0}( 1.3.6.1.4.1.42.2.27.4.2.1 NAME 'sds' DESC 'sds' SUP top AUXILIARY MUST ( cn $ ibm-entryuuid ) )
+  02-default-users.ldif: |-
+    # cp.internal
+    dn: dc=cp,dc=internal
+    objectClass: top
+    objectClass: dcObject
+    objectClass: organization
+    o: cp.internal
+    dc: cp
+
+    # Units
+    dn: ou=Users,dc=cp,dc=internal
+    objectClass: organizationalUnit
+    ou: Users
+
+    dn: ou=Groups,dc=cp,dc=internal
+    objectClass: organizationalUnit
+    ou: Groups
+
+    # Users
+    dn: uid=cpadmin,ou=Users,dc=cp,dc=internal
+    objectClass: inetOrgPerson
+    objectClass: sds
+    objectClass: top
+    cn: cpadmin
+    sn: cpadmin
+    uid: cpadmin
+    mail: cpadmin@cp.internal
+    userpassword: Password
+    employeeType: admin
+    ibm-entryuuid: e6c41859-ced3-4772-bfa3-6ebbc58ec78a
+
+    dn: uid=cpuser,ou=Users,dc=cp,dc=internal
+    objectClass: inetOrgPerson
+    objectClass: sds
+    objectClass: top
+    cn: cpuser
+    sn: cpuser
+    uid: cpuser
+    mail: cpuser@cp.internal
+    userpassword: Password
+    ibm-entryuuid: 40324128-84c8-48c3-803d-4bef500f84f1
+
+    # Groups
+    dn: cn=cpadmins,ou=Groups,dc=cp,dc=internal
+    objectClass: groupOfNames
+    objectClass: sds
+    objectClass: top
+    cn: cpadmins
+    ibm-entryuuid: 53f96449-2b7e-4402-a58a-9790c5089dd0
+    member: uid=cpadmin,ou=Users,dc=cp,dc=internal
+
+    dn: cn=cpusers,ou=Groups,dc=cp,dc=internal
+    objectClass: groupOfNames
+    objectClass: sds
+    objectClass: top
+    cn: cpusers
+    ibm-entryuuid: 30183bb0-1012-4d23-8ae2-f94816b91a75
+    member: uid=cpadmin,ou=Users,dc=cp,dc=internal
+    member: uid=cpuser,ou=Users,dc=cp,dc=internal

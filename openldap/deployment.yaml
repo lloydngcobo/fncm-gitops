@@ -1,0 +1,81 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: openldap
+  namespace: fncm-openldap
+  labels:
+    app: fncm-openldap
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fncm-openldap
+  template:
+    metadata:
+      labels:
+        app: fncm-openldap
+    spec:
+      containers:
+        - name: openldap
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          startupProbe:
+            tcpSocket:
+              port: ldap-port
+            timeoutSeconds: 1
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 30
+          readinessProbe:
+            tcpSocket:
+              port: ldap-port
+            initialDelaySeconds: 60
+            timeoutSeconds: 1
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 10
+          livenessProbe:
+            tcpSocket:
+              port: ldap-port
+            initialDelaySeconds: 60
+            timeoutSeconds: 1
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 10
+          terminationMessagePath: /dev/termination-log
+          ports:
+            - name: ldap-port
+              containerPort: 1389
+              protocol: TCP
+          image: 'bitnami/openldap:2.6.5'
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: data
+              mountPath: /bitnami/openldap/
+            - name: custom-ldif-files
+              mountPath: /ldifs/02-default-users.ldif
+              subPath: 02-default-users.ldif
+            - name: custom-ldif-files
+              mountPath: /schemas/01-sds-schema.ldif
+              subPath: 01-sds-schema.ldif
+          terminationMessagePolicy: File
+          envFrom:
+            - configMapRef:
+                name: openldap-env
+            - secretRef:
+                name: openldap
+          securityContext:
+            privileged: true
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: openldap-data
+        - name: custom-ldif-files
+          configMap:
+            name: openldap-customldif
+            defaultMode: 420

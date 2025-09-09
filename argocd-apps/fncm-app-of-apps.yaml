@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: fncm-root
+  namespace: openshift-gitop
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/your-org/fncm-gitops.git'
+    targetRevision: HEAD
+    path: argocd-apps
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: openshift-gitop
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
