@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: fncm-install
-  namespace: openshift-gitop
+  namespace: openshift-gitops
 spec:
   project: default
   source:
