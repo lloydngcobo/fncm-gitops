@@ -1,5 +1,6 @@
-kind: Pod
+---
 apiVersion: v1
+kind: Pod
 metadata:
   name: install
   namespace: fncm-install
@@ -13,7 +14,9 @@ spec:
       image: ubi9/ubi:9.3
       command: ["/bin/bash"]
       args:
-        ["-c","cd /usr;
+        - "-c"
+        - |
+          cd /usr;
           yum install podman ncurses jq python3.9 python3.9-pip git -y;
           curl -LO https://github.com/ibmruntimes/semeru17-binaries/releases/download/jdk-17.0.9%2B9_openj9-0.41.0/ibm-semeru-open-jdk_x64_linux_17.0.9_9_openj9-0.41.0.tar.gz;
           tar -xvf ibm-semeru-open-jdk_x64_linux_17.0.9_9_openj9-0.41.0.tar.gz;
@@ -47,9 +50,10 @@ spec:
           pip3 --version;
           git --version;
 
-          while true; 
-          do echo 'Install pod - Ready - Enter it via Terminal and "bash"'; 
-          sleep 300; done"]
+          while true; do
+            echo 'Install pod - Ready - Enter it via Terminal and "bash"';
+            sleep 300;
+          done
       imagePullPolicy: IfNotPresent
       volumeMounts:
         - name: install
