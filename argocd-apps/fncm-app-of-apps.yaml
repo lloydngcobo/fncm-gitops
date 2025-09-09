@@ -6,7 +6,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: 'https://github.com/your-org/fncm-gitops.git'
+    repoURL: 'https://github.com/lloydngcobo/fncm-gitops.git'
     targetRevision: HEAD
     path: argocd-apps
   destination:
