@@ -1,1 +1,18 @@
-# Placeholder for fncm-gitops/argocd-apps/fncm-operator.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: fncm-operator
+  namespace: openshift-gitop
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/lloydngcobo/fncm-gitops.git'
+    targetRevision: HEAD
+    path: operators/fncm
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: fncm-operator
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

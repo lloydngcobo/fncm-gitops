@@ -1,51 +1,19 @@
-# Placeholder for fncm-gitops/config/fncm-platform/fncmcluster.yaml
-=======
-apiVersion: fncm.ibm.com/v1
+apiVersion: fncm.ibm.com/v1alpha1
 kind: FNCMCluster
 metadata:
-  name: fncm-deployment
+  name: fncmdeploy
   namespace: fncm
-  labels:
-    app: fncm
-    managed-by: openshift-gitops
 spec:
-  appVersion: "25.0.0"
-  license:
-    accept: true
-  shared_configuration:
-    sc_deployment_type: "Production"
-    sc_optional_components: ""
-    sc_deployment_patterns: "content"
-    sc_deployment_platform: "OCP"
-    sc_fncm_license_model: "FNCM.PVUNonProd"
-
-  # Database configuration - Using confirmed Oracle details
-  datasource_configuration:
-    dc_ssl_enabled: false
-    dc_icn_datasource:
-      dc_database_type: "oracle"
-      dc_oracle_os_datasource:
-        dc_oracle_os_jdbc_url: "jdbc:oracle:thin:@oracle.home.local:1521/ORCLPDB1"
-        dc_database_username: "FNGCDDB"
-        dc_database_password_secret: "gcd-db-secret"
-
-  # LDAP configuration - Using verified settings
-  ldap_configuration:
-    lc_selected_ldap_type: "Microsoft Active Directory"
-    lc_ldap_server: "dc.home.local"
-    lc_ldap_port: "389"
-    lc_bind_secret: "ldap-bind-secret"
-    lc_ldap_base_dn: "DC=home,DC=local"
-    lc_ldap_ssl_enabled: false
-
-  # GCD configuration
-  initialize_configuration:
-    ic_domain_creation:
-      domain_name: "P8DOMAIN"
-      encryption_key: "MySecureEncryptionKey2024!"
-    ic_ldap_creation:
-      ic_ldap_admin_user_name:
-      - "Administrator"
-      ic_ldap_admins_groups_name:
-      - "Domain Admins"
-
+  replicas: 1
+  storageClassName: ocs-external-storagecluster-cephfs
+  database:
+    host: postgresql.fncm-postgresql.svc.cluster.local
+    port: 5432
+    user: cpadmin
+    passwordSecret: postgresql-config
+    databaseName: postgresdb
+  ldap:
+    url: ldap://openldap.fncm-openldap.svc.cluster.local:389
+    baseDN: dc=cp,dc=internal
+    bindDN: cn=admin,dc=cp,dc=internal
+    bindPasswordSecret: openldap

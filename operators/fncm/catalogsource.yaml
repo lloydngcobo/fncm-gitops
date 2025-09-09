@@ -1,17 +1,10 @@
-# Placeholder for fncm-gitops/operators/fncm/catalogsource.yaml
 apiVersion: operators.coreos.com/v1alpha1
 kind: CatalogSource
 metadata:
-  name: ibm-operator-catalog
+  name: fncm-operator-catalog
   namespace: openshift-marketplace
-  labels:
-    app: fncm
-    managed-by: argocd
 spec:
   sourceType: grpc
-  image: icr.io/cpopen/ibm-operator-catalog:latest
-  displayName: IBM Operator Catalog
-  publisher: IBM
-  updateStrategy:
-    registryPoll:
-      interval: 45m
+  image: "quay.io/ibm/fncm-operator-catalog:latest"
+  displayName: "FileNet Operator Catalog"
+  publisher: "IBM"

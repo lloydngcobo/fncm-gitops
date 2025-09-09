@@ -1,1 +1,18 @@
-# Placeholder for fncm-gitops/argocd-apps/fncm-platform.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: fncm-platform
+  namespace: openshift-gitop
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/lloydngcobo/fncm-gitops.git'
+    targetRevision: HEAD
+    path: config/fncm-platform
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: fncm
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

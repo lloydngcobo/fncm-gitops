@@ -1,9 +1,8 @@
-# Placeholder for fncm-gitops/operators/fncm/operatorgroup.yaml
 apiVersion: operators.coreos.com/v1
 kind: OperatorGroup
 metadata:
-  name: fncm-operator-group
-  namespace: fncm
+  name: fncm-operatorgroup
+  namespace: fncm-operator
 spec:
   targetNamespaces:
-  - fncm
+    - fncm-operator
