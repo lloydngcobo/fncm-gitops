@@ -1,6 +1,0 @@
-kind: Project
-apiVersion: project.openshift.io/v1
-metadata:
-  name: fncm-openldap
-  labels:
-    app: fncm-openldap
