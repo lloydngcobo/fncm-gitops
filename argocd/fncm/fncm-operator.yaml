@@ -1,0 +1,19 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: fncm-operator
+  namespace: openshift-gitops
+spec:
+  destination:
+    namespace: fncm
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    repoURL: https://github.com/lloydngcobo/fncm-gitops.git
+    targetRevision: main
+    path: manifests/operator
+  syncPolicy:
+    automated:
+      selfHeal: false
+      prune: false
+

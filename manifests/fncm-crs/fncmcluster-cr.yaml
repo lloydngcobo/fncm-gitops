@@ -1,0 +1,388 @@
+apiVersion: fncm.ibm.com/v1
+kind: FNCMCluster
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"fncm.ibm.com/v1","kind":"FNCMCluster","metadata":{"annotations":{},"creationTimestamp":"2025-09-22T17:18:10Z","generation":15,"labels":{"app.kubernetes.io/instance":"ibm-fncm","app.kubernetes.io/managed-by":"ibm-fncm","app.kubernetes.io/name":"ibm-fncm","release":"5.7.0"},"name":"fncmdeploy","namespace":"fncm","resourceVersion":"10578676","uid":"4f553ee7-14e8-4bac-8efd-89d99b850f45"},"spec":{"appVersion":"25.0.0","content_optional_components":{"ban":true,"cmis":false,"cpe":true,"css":true,"es":false,"graphql":true,"iccsap":false,"ier":true,"tm":true},"datasource_configuration":{"dc_gcd_datasource":{"database_name":"devgcd","database_port":"5432","database_servername":"postgresql.fncm-postgresql.svc.cluster.local","dc_common_gcd_datasource_name":"FNGCDDS","dc_common_gcd_xa_datasource_name":"FNGCDDSXA","dc_database_type":"postgresql","dc_hadr_validation_timeout":15},"dc_icn_datasource":{"database_name":"devicn","database_port":"5432","database_servername":"postgresql.fncm-postgresql.svc.cluster.local","dc_common_icn_datasource_name":"ECMClientDS","dc_database_type":"postgresql","dc_hadr_validation_timeout":15},"dc_os_datasources":[{"database_name":"devos1","database_port":"5432","database_servername":"postgresql.fncm-postgresql.svc.cluster.local","dc_common_os_datasource_name":"FNOS1DS","dc_common_os_xa_datasource_name":"FNOS1DSXA","dc_database_type":"postgresql","dc_hadr_validation_timeout":15,"dc_os_label":"os"},{"database_name":"devicn","database_port":"5432","database_servername":"postgresql.fncm-postgresql.svc.cluster.local","dc_common_os_datasource_name":"FNOS2DS","dc_common_os_xa_datasource_name":"FNOS2DSXA","dc_database_type":"postgresql","dc_hadr_validation_timeout":15,"dc_os_label":"os2"}],"dc_ssl_enabled":false},"ecm_configuration":{"cpe":{"jvm_options":[{"name":"JVM_INITIAL_HEAP_PERCENTAGE","value":"10"},{"name":"JVM_MAX_HEAP_PERCENTAGE","value":"20"}],"replicas":1,"resources":{"limits":{"cpu":"400m","memory":"1Gi"},"requests":{"cpu":"200m","memory":"512Mi"}}},"css":{"replicas":1,"resources":{"limits":{"cpu":"400m","memory":"1Gi"},"requests":{"cpu":"200m","memory":"512Mi"}}},"ier":{"replicas":1,"resources":{"limits":{"cpu":"500m","memory":"1.5Gi"},"requests":{"cpu":"250m","memory":"1Gi"}}},"tm":{"replicas":1,"resources":{"limits":{"cpu":"400m","memory":"1Gi"},"requests":{"cpu":"200m","memory":"200m"}},"tm_production_setting":{"security_roles_to_group_mapping":{"task_admins":{"groups":["cpadmins"],"users":[]},"task_auditors":{"groups":["cpadmins"],"users":[]},"task_users":{"groups":["cpusers"],"users":[]}}}}},"graphql":{"env":[{"name":"ENABLE_GRAPHIQL","value":"true"}],"graphqlConfiguration":{"enableGraphiQL":true},"graphql_production_setting":{"enable_graph_iql":true},"replicas":1,"resources":{"limits":{"cpu":"400m","memory":"1Gi"},"requests":{"cpu":"200m","memory":"400m"}}},"initialize_configuration":{"ic_ldap_creation":{"ic_ldap_admin_user_name":["cpadmin"],"ic_ldap_admins_groups_name":["cpadmins"]},"ic_obj_store_creation":{"object_stores":[{"oc_cpe_obj_store_admin_user_groups":["cpadmin","cpadmins"],"oc_cpe_obj_store_conn":{"dc_os_datasource_name":"FNOS1DS","dc_os_xa_datasource_name":"FNOS1DSXA","name":"os_dbconnection"},"oc_cpe_obj_store_display_name":"os","oc_cpe_obj_store_enable_workflow":true,"oc_cpe_obj_store_symb_name":"os","oc_cpe_obj_store_workflow_admin_group":"cpadmin","oc_cpe_obj_store_workflow_config_group":"cpadmin","oc_cpe_obj_store_workflow_data_tbl_space":"devos1_tbs","oc_cpe_obj_store_workflow_date_time_mask":"mm/dd/yy hh:tt am","oc_cpe_obj_store_workflow_index_tbl_space":"devos1indexts","oc_cpe_obj_store_workflow_locale":"en","oc_cpe_obj_store_workflow_pe_conn_point_name":"os_pe_conn_point","oc_cpe_obj_store_workflow_region_name":"os_region","oc_cpe_obj_store_workflow_region_number":1},{"oc_cpe_obj_store_admin_user_groups":["cpadmin","cpadmins"],"oc_cpe_obj_store_conn":{"dc_os_datasource_name":"FNOS2DS","dc_os_xa_datasource_name":"FNOS2DSXA","name":"os2_dbconnection"},"oc_cpe_obj_store_display_name":"os2","oc_cpe_obj_store_enable_workflow":true,"oc_cpe_obj_store_symb_name":"os2","oc_cpe_obj_store_workflow_admin_group":"cpadmin","oc_cpe_obj_store_workflow_config_group":"cpadmin","oc_cpe_obj_store_workflow_data_tbl_space":"devicn_tbs","oc_cpe_obj_store_workflow_date_time_mask":"mm/dd/yy hh:tt am","oc_cpe_obj_store_workflow_index_tbl_space":"devicnindexts","oc_cpe_obj_store_workflow_locale":"en","oc_cpe_obj_store_workflow_pe_conn_point_name":"os2_pe_conn_point","oc_cpe_obj_store_workflow_region_name":"os2_region","oc_cpe_obj_store_workflow_region_number":1}]}},"ldap_configuration":{"custom":{"lc_group_filter":"(\u0026(cn=%v)(|(objectclass=groupofnames)(objectclass=groupofuniquenames)))","lc_user_filter":"(\u0026(uid=%v)(objectclass=inetOrgPerson))"},"lc_bind_secret":"ldap-bind-secret","lc_ldap_base_dn":"dc=cp,dc=internal","lc_ldap_group_base_dn":"ou=Groups,dc=cp,dc=internal","lc_ldap_group_display_name_attr":"cn","lc_ldap_group_member_id_map":"groupofnames:member","lc_ldap_group_membership_search_filter":"(|(\u0026(objectclass=groupofnames)(member=%v))(\u0026(objectclass=groupofuniquenames)(uniquemember=%v)))","lc_ldap_group_name_attribute":"*:cn","lc_ldap_port":"389","lc_ldap_precheck":true,"lc_ldap_server":"openldap.fncm-openldap.svc.cluster.local","lc_ldap_ssl_enabled":false,"lc_ldap_user_display_name_attr":"uid","lc_ldap_user_name_attribute":"*:cn","lc_selected_ldap_type":"Custom"},"license":{"accept":true},"navigator_configuration":{"icn_production_setting":{"icn_schema":"devicn","icn_table_space":"devicn_tbs"},"java_mail":{"host":"mail.colebo.co.za","port":"465","sender":"info@colebo.co.za","ssl_enabled":true},"resources":{"limits":{"cpu":"400m","memory":"512Mi"},"requests":{"cpu":"200m","memory":"256Mi"}}},"shared_configuration":{"enable_fips":false,"image_pull_secrets":["ibm-entitlement-key"],"root_ca_secret":"fncm-root-ca","sc_content_initialization":true,"sc_content_verification":true,"sc_deployment_context":"FNCM","sc_deployment_patterns":"content","sc_deployment_platform":"OCP","sc_deployment_profile_size":"small","sc_deployment_type":"production","sc_fncm_license_model":"FNCM.PVUNonProd","sc_generate_sample_network_policies":true,"sc_image_repository":"cp.icr.io","storage_configuration":{"sc_fast_file_storage_classname":"nfs-homelab","sc_medium_file_storage_classname":"nfs-homelab","sc_slow_file_storage_classname":"nfs-homelab"},"trusted_certificate_list":[]},"verify_configuration":{"vc_cpe_verification":{"vc_cpe_cbr":[{"cbr_cpe_class_name":"Document","cbr_cpe_obj_store_name":"os","cbr_cpe_search_string":"is a simple"},{"cbr_cpe_class_name":"Document","cbr_cpe_obj_store_name":"os2","cbr_cpe_search_string":"is a simple"}],"vc_cpe_document":[{"doc_cpe_class_name":"Document","doc_cpe_doc_content":"This is a simple document test for os","doc_cpe_doc_content_name":"os_content","doc_cpe_doc_title":"os_TestDocument","doc_cpe_folder_name":"/os_TestFolder","doc_cpe_obj_store_name":"os"},{"doc_cpe_class_name":"Document","doc_cpe_doc_content":"This is a simple document test for os2","doc_cpe_doc_content_name":"os2_content","doc_cpe_doc_title":"os2_TestDocument","doc_cpe_folder_name":"/os2_TestFolder","doc_cpe_obj_store_name":"os2"}],"vc_cpe_folder":[{"folder_cpe_folder_path":"/os_TestFolder","folder_cpe_obj_store_name":"os"},{"folder_cpe_folder_path":"/os2_TestFolder","folder_cpe_obj_store_name":"os2"}],"vc_cpe_workflow":[{"workflow_cpe_connection_point":"os_pe_conn_point","workflow_cpe_enabled":true},{"workflow_cpe_connection_point":"os2_pe_conn_point","workflow_cpe_enabled":true}]},"vc_icn_verification":[{"vc_icn_desktop_id":"desktop1","vc_icn_repository":"osrepo"},{"vc_icn_desktop_id":"desktop2","vc_icn_repository":"os2repo"}]}},"status":{"components":{"ban_initialization":{"banAddDefaultDesktop":"Ready","banAddDefaultPlugins":"Ready","banAddRepository":"Ready"},"ban_verification":{"banCreateFolder":"Ready","banDeleteDoc":"Ready","banDeleteFolder":"Ready","conditions":{"lastTransitionTime":"2025-09-22T17:18:11Z","message":"","reason":"","type":""}},"cmis":{"cmisDeployment":"NotInstalled","cmisRoute":"NotInstalled","cmisService":"NotInstalled","cmisStorage":"NotInstalled","lastTransitionTime":"2025-10-17T04:41:24Z","message":"","reason":""},"cpe":{"cpeDeployment":"Ready","cpeJDBCDriver":"Ready","cpeRoute":"Ready","cpeService":"Ready","cpeStorage":"Ready","lastTransitionTime":"2025-10-17T04:41:24Z","message":"","reason":""},"css":{"cssDeployment":"Ready","cssService":"Ready","cssStorage":"Ready","lastTransitionTime":"2025-10-17T04:41:24Z","message":"","reason":""},"extshare":{"extshareDeployment":"NotInstalled","extshareRoute":"NotInstalled","extshareService":"NotInstalled","extshareStorage":"NotInstalled","lastTransitionTime":"2025-10-17T04:41:24Z","message":"","reason":""},"graphql":{"graphqlDeployment":"Ready","graphqlRoute":"Ready","graphqlService":"Ready","graphqlStorage":"Ready","lastTransitionTime":"2025-09-22T17:18:11Z","message":"","reason":""},"ier":{"conditions":[],"ierDeployment":"Ready","ierRoute":"Ready","ierService":"Ready","ierStorageCheck":"Ready"},"navigator":{"lastTransitionTime":"2025-10-17T04:41:24Z","message":"","navigatorDeployment":"Ready","navigatorService":"Ready","navigatorStorage":"Ready","reason":""},"tm":{"lastTransitionTime":"2025-10-17T04:41:24Z","message":"","reason":"","tmDeployment":"Ready","tmRoute":"Ready","tmService":"Ready","tmStorage":"Ready"}},"conditions":[{"message":"","reason":"Running","status":"False","type":"Running"},{"message":"---\nFAIL - FNCM Deployment failed\nunknown error\n","reason":"Failed","status":"False","type":"Ready"}],"endpoints":[{"name":"CPE Login URL","scope":"External","type":"UI","uri":"https://cpe-fncm.apps.homelab.home.nl/acce/"},{"name":"CSS Health Check URL","scope":"External","type":"UI","uri":"https://cpe-fncm.apps.homelab.home.nl/P8CE/Health/CBRDashboard"},{"name":"GraphQL Login URL","scope":"External","type":"UI","uri":"https://graphql-fncm.apps.homelab.home.nl/content-services-graphql"},{"name":"Task Manager Login URL","scope":"External","type":"UI","uri":"https://tm-fncm.apps.homelab.home.nl/taskManagerWeb/api/v1"},{"name":"Navigator Login URL for FNCM","scope":"External","type":"UI","uri":"https://navigator-fncm.apps.homelab.home.nl/navigator/"},{"name":"IER Login URL","scope":"External","type":"UI","uri":"https://ier-fncm.apps.homelab.home.nl/EnterpriseRecordsPlugin/IERApplicationPlugin.jar"}],"observedGeneration":15}}
+  creationTimestamp: "2025-09-22T17:18:10Z"
+  generation: 16
+  labels:
+    app.kubernetes.io/instance: ibm-fncm
+    app.kubernetes.io/managed-by: ibm-fncm
+    app.kubernetes.io/name: ibm-fncm
+    release: 5.7.0
+  name: fncmdeploy
+  namespace: fncm
+  resourceVersion: "13222844"
+  uid: 4f553ee7-14e8-4bac-8efd-89d99b850f45
+spec:
+  appVersion: 25.0.0
+  content_optional_components:
+    ban: true
+    cmis: false
+    cpe: true
+    css: true
+    es: false
+    graphql: true
+    iccsap: false
+    ier: true
+    tm: true
+  datasource_configuration:
+    dc_gcd_datasource:
+      database_name: devgcd
+      database_port: "5432"
+      database_servername: postgresql.fncm-postgresql.svc.cluster.local
+      dc_common_gcd_datasource_name: FNGCDDS
+      dc_common_gcd_xa_datasource_name: FNGCDDSXA
+      dc_database_type: postgresql
+      dc_hadr_validation_timeout: 15
+    dc_icn_datasource:
+      database_name: devicn
+      database_port: "5432"
+      database_servername: postgresql.fncm-postgresql.svc.cluster.local
+      dc_common_icn_datasource_name: ECMClientDS
+      dc_database_type: postgresql
+      dc_hadr_validation_timeout: 15
+    dc_os_datasources:
+    - database_name: devos1
+      database_port: "5432"
+      database_servername: postgresql.fncm-postgresql.svc.cluster.local
+      dc_common_os_datasource_name: FNOS1DS
+      dc_common_os_xa_datasource_name: FNOS1DSXA
+      dc_database_type: postgresql
+      dc_hadr_validation_timeout: 15
+      dc_os_label: os
+    - database_name: devicn
+      database_port: "5432"
+      database_servername: postgresql.fncm-postgresql.svc.cluster.local
+      dc_common_os_datasource_name: FNOS2DS
+      dc_common_os_xa_datasource_name: FNOS2DSXA
+      dc_database_type: postgresql
+      dc_hadr_validation_timeout: 15
+      dc_os_label: os2
+    dc_ssl_enabled: false
+  ecm_configuration:
+    cpe:
+      jvm_options:
+      - name: JVM_INITIAL_HEAP_PERCENTAGE
+        value: "10"
+      - name: JVM_MAX_HEAP_PERCENTAGE
+        value: "20"
+      replicas: 1
+      resources:
+        limits:
+          cpu: 400m
+          memory: 1Gi
+        requests:
+          cpu: 200m
+          memory: 512Mi
+    css:
+      replicas: 1
+      resources:
+        limits:
+          cpu: 400m
+          memory: 1Gi
+        requests:
+          cpu: 200m
+          memory: 512Mi
+    ier:
+      replicas: 1
+      resources:
+        limits:
+          cpu: 500m
+          memory: 1.5Gi
+        requests:
+          cpu: 250m
+          memory: 1Gi
+    tm:
+      replicas: 1
+      resources:
+        limits:
+          cpu: 400m
+          memory: 1Gi
+        requests:
+          cpu: 200m
+          memory: 200m
+      tm_production_setting:
+        security_roles_to_group_mapping:
+          task_admins:
+            groups:
+            - cpadmins
+            users: []
+          task_auditors:
+            groups:
+            - cpadmins
+            users: []
+          task_users:
+            groups:
+            - cpusers
+            users: []
+  graphql:
+    env:
+    - name: ENABLE_GRAPHIQL
+      value: "true"
+    graphql_production_setting:
+      enable_graph_iql: true
+    graphqlConfiguration:
+      enableGraphiQL: true
+    replicas: 1
+    resources:
+      limits:
+        cpu: 400m
+        memory: 1Gi
+      requests:
+        cpu: 200m
+        memory: 400m
+  initialize_configuration:
+    ic_ldap_creation:
+      ic_ldap_admin_user_name:
+      - cpadmin
+      ic_ldap_admins_groups_name:
+      - cpadmins
+    ic_obj_store_creation:
+      object_stores:
+      - oc_cpe_obj_store_admin_user_groups:
+        - cpadmin
+        - cpadmins
+        oc_cpe_obj_store_conn:
+          dc_os_datasource_name: FNOS1DS
+          dc_os_xa_datasource_name: FNOS1DSXA
+          name: os_dbconnection
+        oc_cpe_obj_store_display_name: os
+        oc_cpe_obj_store_enable_workflow: true
+        oc_cpe_obj_store_symb_name: os
+        oc_cpe_obj_store_workflow_admin_group: cpadmin
+        oc_cpe_obj_store_workflow_config_group: cpadmin
+        oc_cpe_obj_store_workflow_data_tbl_space: devos1_tbs
+        oc_cpe_obj_store_workflow_date_time_mask: mm/dd/yy hh:tt am
+        oc_cpe_obj_store_workflow_index_tbl_space: devos1indexts
+        oc_cpe_obj_store_workflow_locale: en
+        oc_cpe_obj_store_workflow_pe_conn_point_name: os_pe_conn_point
+        oc_cpe_obj_store_workflow_region_name: os_region
+        oc_cpe_obj_store_workflow_region_number: 1
+      - oc_cpe_obj_store_admin_user_groups:
+        - cpadmin
+        - cpadmins
+        oc_cpe_obj_store_conn:
+          dc_os_datasource_name: FNOS2DS
+          dc_os_xa_datasource_name: FNOS2DSXA
+          name: os2_dbconnection
+        oc_cpe_obj_store_display_name: os2
+        oc_cpe_obj_store_enable_workflow: true
+        oc_cpe_obj_store_symb_name: os2
+        oc_cpe_obj_store_workflow_admin_group: cpadmin
+        oc_cpe_obj_store_workflow_config_group: cpadmin
+        oc_cpe_obj_store_workflow_data_tbl_space: devicn_tbs
+        oc_cpe_obj_store_workflow_date_time_mask: mm/dd/yy hh:tt am
+        oc_cpe_obj_store_workflow_index_tbl_space: devicnindexts
+        oc_cpe_obj_store_workflow_locale: en
+        oc_cpe_obj_store_workflow_pe_conn_point_name: os2_pe_conn_point
+        oc_cpe_obj_store_workflow_region_name: os2_region
+        oc_cpe_obj_store_workflow_region_number: 1
+  ldap_configuration:
+    custom:
+      lc_group_filter: (&(cn=%v)(|(objectclass=groupofnames)(objectclass=groupofuniquenames)))
+      lc_user_filter: (&(uid=%v)(objectclass=inetOrgPerson))
+    lc_bind_secret: ldap-bind-secret
+    lc_ldap_base_dn: dc=cp,dc=internal
+    lc_ldap_group_base_dn: ou=Groups,dc=cp,dc=internal
+    lc_ldap_group_display_name_attr: cn
+    lc_ldap_group_member_id_map: groupofnames:member
+    lc_ldap_group_membership_search_filter: (|(&(objectclass=groupofnames)(member=%v))(&(objectclass=groupofuniquenames)(uniquemember=%v)))
+    lc_ldap_group_name_attribute: '*:cn'
+    lc_ldap_port: "389"
+    lc_ldap_precheck: true
+    lc_ldap_server: openldap.fncm-openldap.svc.cluster.local
+    lc_ldap_ssl_enabled: false
+    lc_ldap_user_display_name_attr: uid
+    lc_ldap_user_name_attribute: '*:cn'
+    lc_selected_ldap_type: Custom
+  license:
+    accept: true
+  navigator_configuration:
+    icn_production_setting:
+      icn_schema: devicn
+      icn_table_space: devicn_tbs
+    java_mail:
+      host: mail.colebo.co.za
+      port: "465"
+      sender: info@colebo.co.za
+      ssl_enabled: true
+    resources:
+      limits:
+        cpu: 400m
+        memory: 512Mi
+      requests:
+        cpu: 200m
+        memory: 256Mi
+  shared_configuration:
+    enable_fips: false
+    image_pull_secrets:
+    - ibm-entitlement-key
+    root_ca_secret: fncm-root-ca
+    sc_content_initialization: true
+    sc_content_verification: true
+    sc_deployment_context: FNCM
+    sc_deployment_patterns: content
+    sc_deployment_platform: OCP
+    sc_deployment_profile_size: small
+    sc_deployment_type: production
+    sc_fncm_license_model: FNCM.PVUNonProd
+    sc_generate_sample_network_policies: true
+    sc_image_repository: cp.icr.io
+    storage_configuration:
+      sc_fast_file_storage_classname: nfs-homelab
+      sc_medium_file_storage_classname: nfs-homelab
+      sc_slow_file_storage_classname: nfs-homelab
+    trusted_certificate_list: []
+  verify_configuration:
+    vc_cpe_verification:
+      vc_cpe_cbr:
+      - cbr_cpe_class_name: Document
+        cbr_cpe_obj_store_name: os
+        cbr_cpe_search_string: is a simple
+      - cbr_cpe_class_name: Document
+        cbr_cpe_obj_store_name: os2
+        cbr_cpe_search_string: is a simple
+      vc_cpe_document:
+      - doc_cpe_class_name: Document
+        doc_cpe_doc_content: This is a simple document test for os
+        doc_cpe_doc_content_name: os_content
+        doc_cpe_doc_title: os_TestDocument
+        doc_cpe_folder_name: /os_TestFolder
+        doc_cpe_obj_store_name: os
+      - doc_cpe_class_name: Document
+        doc_cpe_doc_content: This is a simple document test for os2
+        doc_cpe_doc_content_name: os2_content
+        doc_cpe_doc_title: os2_TestDocument
+        doc_cpe_folder_name: /os2_TestFolder
+        doc_cpe_obj_store_name: os2
+      vc_cpe_folder:
+      - folder_cpe_folder_path: /os_TestFolder
+        folder_cpe_obj_store_name: os
+      - folder_cpe_folder_path: /os2_TestFolder
+        folder_cpe_obj_store_name: os2
+      vc_cpe_workflow:
+      - workflow_cpe_connection_point: os_pe_conn_point
+        workflow_cpe_enabled: true
+      - workflow_cpe_connection_point: os2_pe_conn_point
+        workflow_cpe_enabled: true
+    vc_icn_verification:
+    - vc_icn_desktop_id: desktop1
+      vc_icn_repository: osrepo
+    - vc_icn_desktop_id: desktop2
+      vc_icn_repository: os2repo
+status:
+  components:
+    ban_initialization:
+      banAddDefaultDesktop: Ready
+      banAddDefaultPlugins: Ready
+      banAddRepository: Ready
+    ban_verification:
+      banCreateFolder: Ready
+      banDeleteDoc: Ready
+      banDeleteFolder: Ready
+      conditions:
+        lastTransitionTime: "2025-09-22T17:18:11Z"
+        message: ""
+        reason: ""
+        type: ""
+    cmis:
+      cmisDeployment: NotInstalled
+      cmisRoute: NotInstalled
+      cmisService: NotInstalled
+      cmisStorage: NotInstalled
+      lastTransitionTime: "2025-10-23T20:01:46Z"
+      message: ""
+      reason: ""
+    cpe:
+      cpeDeployment: Ready
+      cpeJDBCDriver: Ready
+      cpeRoute: Ready
+      cpeService: Ready
+      cpeStorage: Ready
+      lastTransitionTime: "2025-10-23T20:01:46Z"
+      message: ""
+      reason: ""
+    css:
+      cssDeployment: Ready
+      cssService: Ready
+      cssStorage: Ready
+      lastTransitionTime: "2025-10-23T20:01:46Z"
+      message: ""
+      reason: ""
+    extshare:
+      extshareDeployment: NotInstalled
+      extshareRoute: NotInstalled
+      extshareService: NotInstalled
+      extshareStorage: NotInstalled
+      lastTransitionTime: "2025-10-23T20:01:46Z"
+      message: ""
+      reason: ""
+    graphql:
+      graphqlDeployment: Ready
+      graphqlRoute: Ready
+      graphqlService: Ready
+      graphqlStorage: Ready
+      lastTransitionTime: "2025-09-22T17:18:11Z"
+      message: ""
+      reason: ""
+    ier:
+      conditions: []
+      ierDeployment: Ready
+      ierRoute: Ready
+      ierService: Ready
+      ierStorageCheck: Ready
+    navigator:
+      lastTransitionTime: "2025-10-23T20:01:46Z"
+      message: ""
+      navigatorDeployment: Ready
+      navigatorService: Ready
+      navigatorStorage: Ready
+      reason: ""
+    tm:
+      lastTransitionTime: "2025-10-23T20:01:46Z"
+      message: ""
+      reason: ""
+      tmDeployment: Ready
+      tmRoute: Ready
+      tmService: Ready
+      tmStorage: Ready
+  conditions:
+  - message: ""
+    reason: Running
+    status: "False"
+    type: Running
+  - message: |
+      ---
+      FAIL - FNCM Deployment failed
+      unknown error
+    reason: Failed
+    status: "False"
+    type: Ready
+  endpoints:
+  - name: CPE Login URL
+    scope: External
+    type: UI
+    uri: https://cpe-fncm.apps.homelab.home.nl/acce/
+  - name: CSS Health Check URL
+    scope: External
+    type: UI
+    uri: https://cpe-fncm.apps.homelab.home.nl/P8CE/Health/CBRDashboard
+  - name: GraphQL Login URL
+    scope: External
+    type: UI
+    uri: https://graphql-fncm.apps.homelab.home.nl/content-services-graphql
+  - name: Task Manager Login URL
+    scope: External
+    type: UI
+    uri: https://tm-fncm.apps.homelab.home.nl/taskManagerWeb/api/v1
+  - name: Navigator Login URL for FNCM
+    scope: External
+    type: UI
+    uri: https://navigator-fncm.apps.homelab.home.nl/navigator/
+  - name: IER Login URL
+    scope: External
+    type: UI
+    uri: https://ier-fncm.apps.homelab.home.nl/EnterpriseRecordsPlugin/IERApplicationPlugin.jar
+  observedGeneration: 16

@@ -1,0 +1,24 @@
+apiVersion: v1
+items:
+- apiVersion: operators.coreos.com/v1
+  kind: OperatorGroup
+  metadata:
+    annotations:
+      olm.providedAPIs: FNCMCluster.v1.fncm.ibm.com
+    creationTimestamp: "2025-09-22T15:53:04Z"
+    generation: 1
+    name: ibm-fncm-operator
+    namespace: fncm
+    resourceVersion: "762089"
+    uid: 9caf9972-4d29-427c-8f37-06758c690bd7
+  spec:
+    targetNamespaces:
+    - fncm
+    upgradeStrategy: Default
+  status:
+    lastUpdated: "2025-09-22T15:53:04Z"
+    namespaces:
+    - fncm
+kind: List
+metadata:
+  resourceVersion: ""

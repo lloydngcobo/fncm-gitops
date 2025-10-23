@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: fncm-crs
+  namespace: openshift-gitops
+spec:
+  destination:
+    namespace: fncm
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    repoURL: https://github.com/lloydngcobo/fncm-gitops.git
+    targetRevision: main
+    path: manifests/fncm-crs
+  syncPolicy:
+    automated:
+      selfHeal: false
+      prune: false
+  ignoreDifferences:
+  - group: fncm.ibm.com
+    kind: FncmCluster
+    jsonPointers:
+    - /status
+

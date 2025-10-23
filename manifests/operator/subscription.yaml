@@ -1,0 +1,92 @@
+apiVersion: v1
+items:
+- apiVersion: operators.coreos.com/v1alpha1
+  kind: Subscription
+  metadata:
+    creationTimestamp: "2025-09-22T15:53:04Z"
+    generation: 1
+    labels:
+      operators.coreos.com/ibm-fncm-operator.fncm: ""
+    name: ibm-fncm-operator
+    namespace: fncm
+    resourceVersion: "10141344"
+    uid: 76d7ba7d-06d9-41bf-8a6b-f20b8858f8f6
+  spec:
+    channel: v25.0
+    installPlanApproval: Automatic
+    name: ibm-fncm-operator
+    source: ibm-fncm-operator-catalog
+    sourceNamespace: fncm
+  status:
+    catalogHealth:
+    - catalogSourceRef:
+        apiVersion: operators.coreos.com/v1alpha1
+        kind: CatalogSource
+        name: ibm-fncm-operator-catalog
+        namespace: fncm
+        resourceVersion: "762018"
+        uid: 5ad3e525-41fb-4d89-9deb-66a6a63d9129
+      healthy: true
+      lastUpdated: "2025-09-22T15:53:17Z"
+    - catalogSourceRef:
+        apiVersion: operators.coreos.com/v1alpha1
+        kind: CatalogSource
+        name: certified-operators
+        namespace: openshift-marketplace
+        resourceVersion: "760568"
+        uid: 9c4b214b-8254-4e05-a00e-7ba5d96f2f9c
+      healthy: true
+      lastUpdated: "2025-09-22T15:53:17Z"
+    - catalogSourceRef:
+        apiVersion: operators.coreos.com/v1alpha1
+        kind: CatalogSource
+        name: community-operators
+        namespace: openshift-marketplace
+        resourceVersion: "761332"
+        uid: 2927c304-ad2e-484c-93de-660d00c27ca3
+      healthy: true
+      lastUpdated: "2025-09-22T15:53:17Z"
+    - catalogSourceRef:
+        apiVersion: operators.coreos.com/v1alpha1
+        kind: CatalogSource
+        name: redhat-marketplace
+        namespace: openshift-marketplace
+        resourceVersion: "761318"
+        uid: b24ca5e9-70c7-42bc-abe8-bcb73e45dd20
+      healthy: true
+      lastUpdated: "2025-09-22T15:53:17Z"
+    - catalogSourceRef:
+        apiVersion: operators.coreos.com/v1alpha1
+        kind: CatalogSource
+        name: redhat-operators
+        namespace: openshift-marketplace
+        resourceVersion: "760000"
+        uid: a3fc3b77-d7eb-46a6-a059-6938c0cbe722
+      healthy: true
+      lastUpdated: "2025-09-22T15:53:17Z"
+    conditions:
+    - lastTransitionTime: "2025-09-22T15:53:19Z"
+      message: all available catalogsources are healthy
+      reason: AllCatalogSourcesHealthy
+      status: "False"
+      type: CatalogSourcesUnhealthy
+    currentCSV: ibm-fncm-operator.v57.0.0
+    installPlanGeneration: 1
+    installPlanRef:
+      apiVersion: operators.coreos.com/v1alpha1
+      kind: InstallPlan
+      name: install-pzvxb
+      namespace: fncm
+      resourceVersion: "762071"
+      uid: fd05c4d9-d924-4173-b49c-7ad616cf7c8a
+    installedCSV: ibm-fncm-operator.v57.0.0
+    installplan:
+      apiVersion: operators.coreos.com/v1alpha1
+      kind: InstallPlan
+      name: install-pzvxb
+      uuid: fd05c4d9-d924-4173-b49c-7ad616cf7c8a
+    lastUpdated: "2025-10-16T02:21:52Z"
+    state: AtLatestKnown
+kind: List
+metadata:
+  resourceVersion: ""

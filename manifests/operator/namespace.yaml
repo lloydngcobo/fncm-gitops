@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  annotations:
+    openshift.io/sa.scc.mcs: s0:c30,c0
+    openshift.io/sa.scc.supplemental-groups: 1000870000/10000
+    openshift.io/sa.scc.uid-range: 1000870000/10000
+  creationTimestamp: "2025-09-22T15:52:49Z"
+  labels:
+    kubernetes.io/metadata.name: fncm
+    olm.operatorgroup.uid/9caf9972-4d29-427c-8f37-06758c690bd7: ""
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+  name: fncm
+  resourceVersion: "761973"
+  uid: c1416799-ebfe-4619-8e0f-3e94da2f8494
+spec:
+  finalizers:
+  - kubernetes
+status:
+  phase: Active
