@@ -10,7 +10,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/lloydngcobo/fncm-gitops.git
-    targetRevision: main
+    targetRevision: master
     path: manifests/operator
   syncPolicy:
     automated:
