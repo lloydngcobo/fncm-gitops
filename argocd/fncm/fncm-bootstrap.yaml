@@ -10,7 +10,7 @@ spec:
     namespace: openshift-gitops
   source:
     repoURL: https://github.com/lloydngcobo/fncm-gitops.git
-    targetRevision: main
+    targetRevision: master
     path: argocd/fncm
     directory:
       recurse: true
