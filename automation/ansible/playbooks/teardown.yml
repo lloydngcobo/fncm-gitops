@@ -32,6 +32,27 @@
     remove_crds: false    # set to true via -e remove_crds=true to also delete CRDs
 
   pre_tasks:
+    - name: Log in to OpenShift (if token provided via ocp_token variable)
+      ansible.builtin.shell: >
+        oc login {{ ocp_api_url }}
+        --token={{ ocp_token }}
+        --insecure-skip-tls-verify
+      when: ocp_token | default('') | length > 0
+      changed_when: false
+      no_log: true
+
+    - name: Log in to OpenShift (AWX K8S_AUTH_* env vars)
+      ansible.builtin.shell: >
+        oc login
+        --server={{ lookup('env', 'K8S_AUTH_HOST') | default(ocp_api_url, true) }}
+        --token={{ lookup('env', 'K8S_AUTH_API_KEY') }}
+        --insecure-skip-tls-verify
+      when:
+        - ocp_token | default('') | length == 0
+        - lookup('env', 'K8S_AUTH_API_KEY') | length > 0
+      changed_when: false
+      no_log: true
+
     - name: Verify oc login
       ansible.builtin.shell: oc whoami
       register: oc_whoami
@@ -43,11 +64,11 @@
         msg: "Authenticated as: {{ oc_whoami.stdout }} -- beginning teardown."
 
     - name: Warn about destructive action
-      ansible.builtin.pause:
-        prompt: >
-          WARNING: This will delete the fncm, fncm-openldap, fncm-postgresql,
-          and fncm-install namespaces and ALL resources within them.
-          Press ENTER to continue or Ctrl+C to abort.
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: This will delete the {{ fncm_namespace }}, {{ openldap_namespace }},
+          {{ postgresql_namespace }}, and {{ install_namespace }} namespaces and ALL
+          resources within them. Proceeding with teardown.
 
   tasks:
     # ── ArgoCD Application ─────────────────────────────────────────────────────
