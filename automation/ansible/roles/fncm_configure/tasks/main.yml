@@ -7,7 +7,8 @@
 
 - name: Write silent prerequisites config
   ansible.builtin.copy:
-    dest: "/tmp/silent_prereqs.toml"
+    # prerequisites.py --silent reads from scripts/silent_config/silent_install_prerequisites.toml
+    dest: "/tmp/silent_install_prerequisites.toml"
     content: |
       NAMESPACE = "{{ fncm_namespace }}"
       LICENSE = "{{ fncm_license }}"
@@ -46,15 +47,15 @@
 
 - name: Copy silent prereqs config to install pod
   ansible.builtin.shell: >
-    oc cp /tmp/silent_prereqs.toml
-    {{ install_namespace }}/install:/tmp/silent_prereqs.toml
+    oc cp /tmp/silent_install_prerequisites.toml
+    {{ install_namespace }}/install:{{ container_samples_path }}/scripts/silent_config/silent_install_prerequisites.toml
   changed_when: false
 
 - name: Run prerequisites.py gather (silent mode)
   ansible.builtin.shell: >
     oc exec -n {{ install_namespace }} install --
     bash -c "cd {{ container_samples_path }}/scripts &&
-    python3 prerequisites.py --silent-config /tmp/silent_prereqs.toml gather"
+    python3 prerequisites.py --silent gather"
   register: gather_result
   changed_when: true
 
@@ -68,11 +69,15 @@
 
       find "$PROP" -name "*.toml" -exec cp {} {}.bck \;
 
-      sed -i \
-        -e 's/taskAdmins/{{ fncm_admin_group }}/g' \
-        -e 's/taskUsers/{{ fncm_user_group }}/g'   \
-        -e 's/taskAuditors/{{ fncm_admin_group }}/g' \
-        "$PROP/fncm_components_options.toml"
+      if [ -f "$PROP/fncm_components_options.toml" ]; then
+        sed -i \
+          -e 's/taskAdmins/{{ fncm_admin_group }}/g' \
+          -e 's/taskUsers/{{ fncm_user_group }}/g'   \
+          -e 's/taskAuditors/{{ fncm_admin_group }}/g' \
+          "$PROP/fncm_components_options.toml"
+      else
+        echo "==> Skipping fncm_components_options.toml (TM not enabled)"
+      fi
 
       sed -i \
         -e 's/DATABASE_SERVERNAME = "<Required>"/DATABASE_SERVERNAME = "{{ postgres_host }}"/g' \
@@ -137,7 +142,7 @@
 - name: Run prerequisites.py generate
   ansible.builtin.shell: >
     oc exec -n {{ install_namespace }} install --
-    bash -c "cd {{ container_samples_path }}/scripts && python3 prerequisites.py generate"
+    bash -c "cd {{ container_samples_path }}/scripts && python3 prerequisites.py --silent generate"
   register: generate_result
   changed_when: true
 
