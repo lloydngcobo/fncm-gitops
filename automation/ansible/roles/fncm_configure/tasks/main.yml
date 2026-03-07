@@ -29,7 +29,7 @@
       ICCSAP = {{ deploy_iccsap | lower }}
       DATABASE_TYPE = 4
       DATABASE_SSL_ENABLE = false
-      DATABASE_OBJECT_STORE_COUNT = 1
+      DATABASE_OBJECT_STORE_COUNT = {{ 3 if deploy_ier else 1 }}
       SENDMAIL_SUPPORT = false
       ICC_SUPPORT = false
       TM_CUSTOM_GROUP_SUPPORT = false
@@ -93,6 +93,22 @@
         -e '0,/TABLESPACE_NAME = "ICNDB"/s//TABLESPACE_NAME = "{{ icn_tablespace }}"/'          \
         -e '0,/SCHEMA_NAME = "ICNDB"/s//SCHEMA_NAME = "{{ icn_schema }}"/'                      \
         "$PROP/fncm_db_server.toml"
+
+      if [ "{{ deploy_ier | lower }}" = "true" ]; then
+        echo "==> Patching fncm_db_server.toml - OS2 (IER ROS) database..."
+        sed -i \
+          -e '0,/DATABASE_NAME = "<Required>"/s//DATABASE_NAME = "{{ os2_db_name }}"/' \
+          -e '0,/DATABASE_USERNAME = """<Required>"""/s//DATABASE_USERNAME = """{{ os2_db_user }}"""/' \
+          -e '0,/DATABASE_PASSWORD = """<Required>"""/s//DATABASE_PASSWORD = """{{ os2_db_password }}"""/' \
+          "$PROP/fncm_db_server.toml"
+
+        echo "==> Patching fncm_db_server.toml - OS3 (IER FPOS) database..."
+        sed -i \
+          -e '0,/DATABASE_NAME = "<Required>"/s//DATABASE_NAME = "{{ os3_db_name }}"/' \
+          -e '0,/DATABASE_USERNAME = """<Required>"""/s//DATABASE_USERNAME = """{{ os3_db_user }}"""/' \
+          -e '0,/DATABASE_PASSWORD = """<Required>"""/s//DATABASE_PASSWORD = """{{ os3_db_password }}"""/' \
+          "$PROP/fncm_db_server.toml"
+      fi
 
       sed -i \
         -e 's/SLOW_FILE_STORAGE_CLASSNAME = "<Required>"/SLOW_FILE_STORAGE_CLASSNAME = "{{ storage_class_name }}"/g'     \
@@ -178,44 +194,74 @@
     {{ postgresql_namespace }}/{{ pg_pod.stdout }}:/usr/dbscript
   changed_when: false
 
-- name: Create ICN tablespace directory
-  ansible.builtin.shell: >
-    oc exec -n {{ postgresql_namespace }} {{ pg_pod.stdout }} --
-    bash -c "mkdir -p /pgsqldata/{{ icn_schema }} &&
-    chown postgres:postgres /pgsqldata/{{ icn_schema }}"
+- name: Create ICN tablespace directory and apply createICN.sql (idempotent)
+  ansible.builtin.shell: |
+    oc exec -n {{ postgresql_namespace }} {{ pg_pod.stdout }} -- bash -c "
+      mkdir -p /pgsqldata/{{ icn_schema }} && chown postgres:postgres /pgsqldata/{{ icn_schema }}
+      if psql postgresql://{{ postgres_user }}@localhost:5432/{{ postgres_db }} \
+           -tc \"SELECT 1 FROM pg_database WHERE datname='{{ icn_db_name }}'\" 2>/dev/null | grep -q 1; then
+        echo 'ICN database already exists - skipping.'
+      else
+        psql postgresql://{{ postgres_user }}@localhost:5432/{{ postgres_db }} \
+             --file=/usr/dbscript/createICN.sql
+        echo 'ICN database created.'
+      fi"
   changed_when: true
 
-- name: Apply createICN.sql
-  ansible.builtin.shell: >
-    oc exec -n {{ postgresql_namespace }} {{ pg_pod.stdout }} --
-    bash -c "psql postgresql://{{ postgres_user }}@localhost:5432/{{ postgres_db }}
-    --file=/usr/dbscript/createICN.sql"
+- name: Create OS1 tablespace directories and apply createos.sql (idempotent)
+  ansible.builtin.shell: |
+    oc exec -n {{ postgresql_namespace }} {{ pg_pod.stdout }} -- bash -c "
+      mkdir -p /pgsqldata/{{ os1_db_name }}/{data,index} && chown -R postgres:postgres /pgsqldata/{{ os1_db_name }}
+      if psql postgresql://{{ postgres_user }}@localhost:5432/{{ postgres_db }} \
+           -tc \"SELECT 1 FROM pg_database WHERE datname='{{ os1_db_name }}'\" 2>/dev/null | grep -q 1; then
+        echo 'OS1 database already exists - skipping.'
+      else
+        psql postgresql://{{ postgres_user }}@localhost:5432/{{ postgres_db }} \
+             --file=/usr/dbscript/createos.sql
+        echo 'OS1 database created.'
+      fi"
   changed_when: true
 
-- name: Create OS1 tablespace directories
-  ansible.builtin.shell: >
-    oc exec -n {{ postgresql_namespace }} {{ pg_pod.stdout }} --
-    bash -c "mkdir -p /pgsqldata/{{ os1_db_name }}/{data,index} &&
-    chown -R postgres:postgres /pgsqldata/{{ os1_db_name }}"
+- name: Create GCD tablespace directory and apply createGCD.sql (idempotent)
+  ansible.builtin.shell: |
+    oc exec -n {{ postgresql_namespace }} {{ pg_pod.stdout }} -- bash -c "
+      mkdir -p /pgsqldata/{{ gcd_db_name }} && chown postgres:postgres /pgsqldata/{{ gcd_db_name }}
+      if psql postgresql://{{ postgres_user }}@localhost:5432/{{ postgres_db }} \
+           -tc \"SELECT 1 FROM pg_database WHERE datname='{{ gcd_db_name }}'\" 2>/dev/null | grep -q 1; then
+        echo 'GCD database already exists - skipping.'
+      else
+        psql postgresql://{{ postgres_user }}@localhost:5432/{{ postgres_db }} \
+             --file=/usr/dbscript/createGCD.sql
+        echo 'GCD database created.'
+      fi"
   changed_when: true
 
-- name: Apply createos.sql
-  ansible.builtin.shell: >
-    oc exec -n {{ postgresql_namespace }} {{ pg_pod.stdout }} --
-    bash -c "psql postgresql://{{ postgres_user }}@localhost:5432/{{ postgres_db }}
-    --file=/usr/dbscript/createos.sql"
+- name: Create OS2 (IER ROS) tablespace directories and apply createos2.sql (idempotent)
+  ansible.builtin.shell: |
+    oc exec -n {{ postgresql_namespace }} {{ pg_pod.stdout }} -- bash -c "
+      mkdir -p /pgsqldata/{{ os2_db_name }}/{data,index} && chown -R postgres:postgres /pgsqldata/{{ os2_db_name }}
+      if psql postgresql://{{ postgres_user }}@localhost:5432/{{ postgres_db }} \
+           -tc \"SELECT 1 FROM pg_database WHERE datname='{{ os2_db_name }}'\" 2>/dev/null | grep -q 1; then
+        echo 'OS2 database already exists - skipping.'
+      else
+        psql postgresql://{{ postgres_user }}@localhost:5432/{{ postgres_db }} \
+             --file=/usr/dbscript/createos2.sql
+        echo 'OS2 database created.'
+      fi"
+  when: deploy_ier | bool
   changed_when: true
 
-- name: Create GCD tablespace directory
-  ansible.builtin.shell: >
-    oc exec -n {{ postgresql_namespace }} {{ pg_pod.stdout }} --
-    bash -c "mkdir -p /pgsqldata/{{ gcd_db_name }} &&
-    chown postgres:postgres /pgsqldata/{{ gcd_db_name }}"
-  changed_when: true
-
-- name: Apply createGCD.sql
-  ansible.builtin.shell: >
-    oc exec -n {{ postgresql_namespace }} {{ pg_pod.stdout }} --
-    bash -c "psql postgresql://{{ postgres_user }}@localhost:5432/{{ postgres_db }}
-    --file=/usr/dbscript/createGCD.sql"
+- name: Create OS3 (IER FPOS) tablespace directories and apply createos3.sql (idempotent)
+  ansible.builtin.shell: |
+    oc exec -n {{ postgresql_namespace }} {{ pg_pod.stdout }} -- bash -c "
+      mkdir -p /pgsqldata/{{ os3_db_name }}/{data,index} && chown -R postgres:postgres /pgsqldata/{{ os3_db_name }}
+      if psql postgresql://{{ postgres_user }}@localhost:5432/{{ postgres_db }} \
+           -tc \"SELECT 1 FROM pg_database WHERE datname='{{ os3_db_name }}'\" 2>/dev/null | grep -q 1; then
+        echo 'OS3 database already exists - skipping.'
+      else
+        psql postgresql://{{ postgres_user }}@localhost:5432/{{ postgres_db }} \
+             --file=/usr/dbscript/createos3.sql
+        echo 'OS3 database created.'
+      fi"
+  when: deploy_ier | bool
   changed_when: true

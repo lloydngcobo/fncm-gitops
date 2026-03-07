@@ -1,6 +1,29 @@
 ---
 # Role: fncm_deploy
-# Applies network policies, secrets, patches and applies the FNCM CR.
+# Applies network policies, secrets, and applies the FNCM CR.
+# Mirrors PowerShell step 7 including operator restore, GraphQL XSRF fix,
+# CPE init tracking (IER), component pod waits, and operator pause.
+
+# ── Pre-step: Restore operator if paused from a previous run ─────────────────
+# The operator is paused (replicas=0) at the end of every deploy to lock in the
+# GraphQL XSRF fix.  On a re-run it must be restored so it can reconcile the CR.
+
+- name: Check if FNCM operator deployment exists
+  ansible.builtin.shell: >
+    oc get deployment ibm-fncm-operator -n {{ fncm_namespace }}
+    -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "absent"
+  register: operator_replicas
+  changed_when: false
+
+- name: Restore operator if paused (replicas=0)
+  ansible.builtin.shell: >
+    oc scale deployment ibm-fncm-operator --replicas=1 -n {{ fncm_namespace }} &&
+    oc rollout status deployment/ibm-fncm-operator -n {{ fncm_namespace }} --timeout=120s
+  when: operator_replicas.stdout == "0"
+  register: operator_restored
+  changed_when: true
+
+# ── 7a: Network policies ──────────────────────────────────────────────────────
 
 - name: Apply permissive egress NetworkPolicy to fncm namespace
   kubernetes.core.k8s:
@@ -40,26 +63,17 @@
                   cidr: "{{ network_cidr }}"
                   except: []
 
-- name: Apply LDAP bind secret
+# ── 7b: Apply ALL secrets from generated secrets directory ───────────────────
+
+- name: Apply all generated Kubernetes secrets
   ansible.builtin.shell: >
     oc exec -n {{ install_namespace }} install --
-    bash -c "oc apply -f {{ generated_files_path }}/secrets/ldap-bind-secret.yaml
-    -n {{ fncm_namespace }}"
+    bash -c "cd {{ generated_files_path }}/secrets &&
+    echo 'Secrets to apply:' && ls -1 *.yaml &&
+    oc apply -f . -n {{ fncm_namespace }}"
   changed_when: true
 
-- name: Apply FNCM secret
-  ansible.builtin.shell: >
-    oc exec -n {{ install_namespace }} install --
-    bash -c "oc apply -f {{ generated_files_path }}/secrets/ibm-fncm-secret.yaml
-    -n {{ fncm_namespace }}"
-  changed_when: true
-
-- name: Apply BAN secret
-  ansible.builtin.shell: >
-    oc exec -n {{ install_namespace }} install --
-    bash -c "oc apply -f {{ generated_files_path }}/secrets/ibm-ban-secret.yaml
-    -n {{ fncm_namespace }}"
-  changed_when: true
+# ── 7c: Apply FNCM Custom Resource ───────────────────────────────────────────
 
 - name: Apply FNCM Custom Resource
   ansible.builtin.shell: >
@@ -73,6 +87,23 @@
   ansible.builtin.debug:
     var: cr_apply.stdout_lines
 
+# ── 7d: Trigger reconciliation if operator was just restored ─────────────────
+
+- name: Trigger operator reconciliation via annotation (re-run path)
+  ansible.builtin.shell: >
+    oc annotate fncmcluster/fncmdeploy -n {{ fncm_namespace }}
+    "fncm.automation/last-applied={{ ansible_date_time.iso8601_basic_short }}"
+    --overwrite
+  when: operator_replicas.stdout == "0"
+  changed_when: true
+
+- name: Wait for operator to detect changes (re-run path)
+  ansible.builtin.pause:
+    seconds: 90
+  when: operator_replicas.stdout == "0"
+
+# ── 7e: Wait for FNCMCluster to reach Ready condition ────────────────────────
+
 - name: Wait for FNCMCluster to reach Ready condition
   ansible.builtin.shell: >
     oc get FNCMCluster fncmdeploy -n {{ fncm_namespace }}
@@ -82,6 +113,98 @@
   delay: 60
   until: "'Ready' in fncm_conditions.stdout"
   changed_when: false
+
+# ── 7f: CPE object store init tracking (IER only) ────────────────────────────
+# When IER is deployed the operator must bootstrap OS2 (ROS) and OS3 (FPOS).
+# This is tracked by fncmdeploy-initialization-config.cpe_os_number.
+
+- name: Wait for CPE init to complete (IER - cpe_os_number must reach 3)
+  ansible.builtin.shell: >
+    oc get configmap fncmdeploy-initialization-config -n {{ fncm_namespace }}
+    -o jsonpath='{.data.cpe_os_number}' 2>/dev/null || echo "0"
+  register: cpe_os_number
+  retries: 30
+  delay: 60
+  until: "cpe_os_number.stdout | trim == '3'"
+  changed_when: false
+  when: deploy_ier | bool
+
+# ── 7g: Wait for optional component pods ─────────────────────────────────────
+
+- name: Wait for IER pod to reach Running state
+  ansible.builtin.shell: >
+    oc get pods -n {{ fncm_namespace }} --no-headers 2>/dev/null |
+    grep -i ier | grep -E '\s+1/1\s+Running\s+' | head -1
+  register: ier_pod_status
+  retries: 60
+  delay: 30
+  until: "ier_pod_status.stdout | length > 0"
+  changed_when: false
+  when: deploy_ier | bool
+  failed_when: false
+
+- name: Wait for ICCSAP pod to reach Running state
+  ansible.builtin.shell: >
+    oc get pods -n {{ fncm_namespace }} --no-headers 2>/dev/null |
+    grep -i iccsap | grep -E '\s+1/1\s+Running\s+' | head -1
+  register: iccsap_pod_status
+  retries: 60
+  delay: 30
+  until: "iccsap_pod_status.stdout | length > 0"
+  changed_when: false
+  when: deploy_iccsap | bool
+  failed_when: false
+
+# ── 7h: GraphQL XSRF / auth permanent fix ────────────────────────────────────
+# Root cause: FNCM operator hardcodes DISABLE_BASIC_AUTH=true, ENABLE_GRAPHIQL=false,
+# and omits IBM_ICS_DISABLE_XSRF_CHECK (leaving XSRF validation on → 500 errors).
+# Fix: pause operator (stop reconciliation), patch GraphQL deployment env vars.
+# The Deployment controller still manages pod restarts; env vars survive restarts.
+
+- name: Scale FNCM operator to 0 (pause reconciliation for GraphQL fix)
+  ansible.builtin.shell: >
+    oc scale deployment ibm-fncm-operator --replicas=0 -n {{ fncm_namespace }}
+  changed_when: true
+  when: deploy_graphql | bool
+
+- name: Patch GraphQL deployment env vars (XSRF fix)
+  ansible.builtin.shell: >
+    oc set env deployment/fncmdeploy-graphql-deploy
+    IBM_ICS_DISABLE_XSRF_CHECK=true
+    ENABLE_GRAPHIQL=true
+    DISABLE_BASIC_AUTH=false
+    -n {{ fncm_namespace }}
+  register: graphql_patch
+  changed_when: true
+  failed_when: false
+  when: deploy_graphql | bool
+
+- name: Wait for GraphQL deployment to roll out after env var patch
+  ansible.builtin.shell: >
+    oc rollout status deployment/fncmdeploy-graphql-deploy
+    -n {{ fncm_namespace }} --timeout=300s
+  changed_when: false
+  when:
+    - deploy_graphql | bool
+    - graphql_patch.rc == 0
+
+- name: Warn if GraphQL deployment not found (re-run step after GraphQL is deployed)
+  ansible.builtin.debug:
+    msg: "WARNING: GraphQL deployment not found. Re-run this role once fncmdeploy-graphql-deploy exists."
+  when:
+    - deploy_graphql | bool
+    - graphql_patch.rc != 0
+
+# ── 7i: Pause operator when GraphQL is NOT deployed ──────────────────────────
+
+- name: Scale FNCM operator to 0 (pause to prevent unwanted reconciliation)
+  ansible.builtin.shell: >
+    oc scale deployment ibm-fncm-operator --replicas=0 -n {{ fncm_namespace }}
+  changed_when: true
+  when: not (deploy_graphql | bool)
+  failed_when: false
+
+# ── Summary ───────────────────────────────────────────────────────────────────
 
 - name: Show final component status
   ansible.builtin.shell: >
@@ -95,4 +218,5 @@
     msg:
       - "FNCM deployment complete!"
       - "Components: {{ fncm_status.stdout }}"
+      - "Operator is paused (replicas=0) to lock in GraphQL XSRF fix."
       - "Access info: oc get cm fncmdeploy-fncm-access-info -n {{ fncm_namespace }} -o yaml"

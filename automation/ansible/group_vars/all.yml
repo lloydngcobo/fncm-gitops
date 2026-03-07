@@ -42,6 +42,14 @@ os1_db_name:     "devos1"
 os1_db_user:     "devos1"
 os1_db_password: "Password"
 
+os2_db_name:     "devos2"   # IER - Records Object Store (ROS)
+os2_db_user:     "devos2"
+os2_db_password: "Password"
+
+os3_db_name:     "devos3"   # IER - File Plan Object Store (FPOS)
+os3_db_user:     "devos3"
+os3_db_password: "Password"
+
 icn_db_name:     "devicn"
 icn_db_user:     "devicn"
 icn_db_password: "Password"
