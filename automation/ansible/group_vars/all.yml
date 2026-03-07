@@ -77,8 +77,8 @@ deploy_iccsap: false
 # --- Paths inside install pod ---
 install_path:           "/usr/install"
 container_samples_path: "/usr/install/ibm-fncm-containers"
-property_file_path:     "/usr/install/ibm-fncm-containers/scripts/propertyFile"
-generated_files_path:   "/usr/install/ibm-fncm-containers/scripts/generatedFiles"
+property_file_path:     "/usr/install/ibm-fncm-containers/scripts/propertyFile/{{ fncm_namespace }}"
+generated_files_path:   "/usr/install/ibm-fncm-containers/scripts/generatedFiles/{{ fncm_namespace }}"
 
 # --- Repository ---
 fncm_repo_url: "https://github.com/ibm-ecm/ibm-fncm-containers.git"
