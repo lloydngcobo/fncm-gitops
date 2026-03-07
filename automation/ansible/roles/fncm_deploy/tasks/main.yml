@@ -40,19 +40,6 @@
                   cidr: "{{ network_cidr }}"
                   except: []
 
-- name: Patch CR - change LDAP type to Custom (for OpenLDAP)
-  ansible.builtin.shell: >
-    oc exec -n {{ install_namespace }} install --
-    bash -c "
-    CR={{ generated_files_path }}/ibm_fncm_cr_production.yaml &&
-    cp \$CR \$CR.bak &&
-    sed -i
-    -e 's/lc_selected_ldap_type: IBM Security Directory Server/lc_selected_ldap_type: Custom/g'
-    -e 's/tds:/custom:/g'
-    \$CR &&
-    echo 'CR patched.'"
-  changed_when: true
-
 - name: Apply LDAP bind secret
   ansible.builtin.shell: >
     oc exec -n {{ install_namespace }} install --
