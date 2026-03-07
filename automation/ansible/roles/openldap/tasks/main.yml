@@ -1,0 +1,265 @@
+---
+# Role: openldap
+# Deploys OpenLDAP into the fncm-openldap namespace.
+
+- name: Create fncm-openldap Project
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: Project
+      apiVersion: project.openshift.io/v1
+      metadata:
+        name: "{{ openldap_namespace }}"
+        labels:
+          app: fncm-openldap
+
+- name: Create privileged RoleBinding for OpenLDAP SA
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: RoleBinding
+      apiVersion: rbac.authorization.k8s.io/v1
+      metadata:
+        name: openldap-privileged
+        namespace: "{{ openldap_namespace }}"
+        labels:
+          app: fncm-openldap
+      subjects:
+        - kind: ServiceAccount
+          name: default
+          namespace: "{{ openldap_namespace }}"
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: ClusterRole
+        name: system:openshift:scc:privileged
+
+- name: Create OpenLDAP environment ConfigMap
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: ConfigMap
+      apiVersion: v1
+      metadata:
+        name: openldap-env
+        namespace: "{{ openldap_namespace }}"
+        labels:
+          app: fncm-openldap
+      data:
+        BITNAMI_DEBUG: "true"
+        LDAP_ORGANISATION: "{{ ldap_organisation }}"
+        LDAP_ROOT: "{{ ldap_root }}"
+        LDAP_DOMAIN: "{{ ldap_domain }}"
+
+- name: Create OpenLDAP custom LDIF ConfigMap
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: ConfigMap
+      apiVersion: v1
+      metadata:
+        name: openldap-customldif
+        namespace: "{{ openldap_namespace }}"
+        labels:
+          app: fncm-openldap
+      data:
+        01-sds-schema.ldif: |
+          dn: cn=sds,cn=schema,cn=config
+          objectClass: olcSchemaConfig
+          cn: sds
+          olcAttributeTypes: {0}( 1.3.6.1.4.1.42.2.27.4.1.6 NAME 'ibm-entryUuid' DESC
+            'Uniquely identifies a directory entry throughout its life.' EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+          olcObjectClasses: {0}( 1.3.6.1.4.1.42.2.27.4.2.1 NAME 'sds' DESC 'sds' SUP top AUXILIARY MUST ( cn $ ibm-entryuuid ) )
+        02-default-users.ldif: |
+          dn: {{ ldap_root }}
+          objectClass: top
+          objectClass: dcObject
+          objectClass: organization
+          o: {{ ldap_organisation }}
+          dc: cp
+
+          dn: ou=Users,{{ ldap_root }}
+          objectClass: organizationalUnit
+          ou: Users
+
+          dn: ou=Groups,{{ ldap_root }}
+          objectClass: organizationalUnit
+          ou: Groups
+
+          dn: uid=cpadmin,ou=Users,{{ ldap_root }}
+          objectClass: inetOrgPerson
+          objectClass: sds
+          objectClass: top
+          cn: cpadmin
+          sn: cpadmin
+          uid: cpadmin
+          mail: cpadmin@{{ ldap_domain }}
+          userpassword: {{ fncm_admin_password }}
+          employeeType: admin
+          ibm-entryuuid: e6c41859-ced3-4772-bfa3-6ebbc58ec78a
+
+          dn: uid=cpuser,ou=Users,{{ ldap_root }}
+          objectClass: inetOrgPerson
+          objectClass: sds
+          objectClass: top
+          cn: cpuser
+          sn: cpuser
+          uid: cpuser
+          mail: cpuser@{{ ldap_domain }}
+          userpassword: {{ fncm_admin_password }}
+          ibm-entryuuid: 40324128-84c8-48c3-803d-4bef500f84f1
+
+          dn: cn=cpadmins,ou=Groups,{{ ldap_root }}
+          objectClass: groupOfNames
+          objectClass: sds
+          objectClass: top
+          cn: cpadmins
+          ibm-entryuuid: 53f96449-2b7e-4402-a58a-9790c5089dd0
+          member: uid=cpadmin,ou=Users,{{ ldap_root }}
+
+          dn: cn=cpusers,ou=Groups,{{ ldap_root }}
+          objectClass: groupOfNames
+          objectClass: sds
+          objectClass: top
+          cn: cpusers
+          ibm-entryuuid: 30183bb0-1012-4d23-8ae2-f94816b91a75
+          member: uid=cpadmin,ou=Users,{{ ldap_root }}
+          member: uid=cpuser,ou=Users,{{ ldap_root }}
+
+- name: Create OpenLDAP admin Secret
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: Secret
+      apiVersion: v1
+      metadata:
+        name: openldap
+        namespace: "{{ openldap_namespace }}"
+        labels:
+          app: fncm-openldap
+      stringData:
+        LDAP_ADMIN_PASSWORD: "{{ ldap_admin_password }}"
+
+- name: Create OpenLDAP data PVC
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: PersistentVolumeClaim
+      apiVersion: v1
+      metadata:
+        name: openldap-data
+        namespace: "{{ openldap_namespace }}"
+        labels:
+          app: fncm-openldap
+      spec:
+        accessModes: [ReadWriteMany]
+        resources:
+          requests:
+            storage: 1Gi
+        storageClassName: "{{ storage_class_name }}"
+        volumeMode: Filesystem
+
+- name: Create OpenLDAP Deployment
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: Deployment
+      apiVersion: apps/v1
+      metadata:
+        name: openldap
+        namespace: "{{ openldap_namespace }}"
+        labels:
+          app: fncm-openldap
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: fncm-openldap
+        template:
+          metadata:
+            labels:
+              app: fncm-openldap
+          spec:
+            containers:
+              - name: openldap
+                image: "{{ openldap_image }}"
+                imagePullPolicy: IfNotPresent
+                securityContext:
+                  privileged: true
+                ports:
+                  - name: ldap-port
+                    containerPort: 1389
+                    protocol: TCP
+                resources:
+                  requests:
+                    cpu: 100m
+                    memory: 256Mi
+                  limits:
+                    cpu: 500m
+                    memory: 512Mi
+                startupProbe:
+                  tcpSocket:
+                    port: ldap-port
+                  periodSeconds: 10
+                  failureThreshold: 30
+                readinessProbe:
+                  tcpSocket:
+                    port: ldap-port
+                  initialDelaySeconds: 60
+                  periodSeconds: 10
+                  failureThreshold: 10
+                livenessProbe:
+                  tcpSocket:
+                    port: ldap-port
+                  initialDelaySeconds: 60
+                  periodSeconds: 10
+                  failureThreshold: 10
+                envFrom:
+                  - configMapRef:
+                      name: openldap-env
+                  - secretRef:
+                      name: openldap
+                volumeMounts:
+                  - name: data
+                    mountPath: /bitnami/openldap/
+                  - name: custom-ldif-files
+                    mountPath: /ldifs/02-default-users.ldif
+                    subPath: 02-default-users.ldif
+                  - name: custom-ldif-files
+                    mountPath: /schemas/01-sds-schema.ldif
+                    subPath: 01-sds-schema.ldif
+            volumes:
+              - name: data
+                persistentVolumeClaim:
+                  claimName: openldap-data
+              - name: custom-ldif-files
+                configMap:
+                  name: openldap-customldif
+                  defaultMode: 420
+
+- name: Create OpenLDAP Service
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: Service
+      apiVersion: v1
+      metadata:
+        name: openldap
+        namespace: "{{ openldap_namespace }}"
+        labels:
+          app: fncm-openldap
+      spec:
+        type: NodePort
+        ports:
+          - name: ldap-port
+            protocol: TCP
+            port: 389
+            targetPort: ldap-port
+        selector:
+          app: fncm-openldap
+
+- name: Wait for OpenLDAP deployment to be ready
+  ansible.builtin.shell: >
+    oc rollout status deployment/openldap
+    -n {{ openldap_namespace }}
+    --timeout=600s
+  changed_when: false

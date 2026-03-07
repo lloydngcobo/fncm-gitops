@@ -1,0 +1,418 @@
+---
+# =============================================================================
+# AWX Bootstrap Playbook
+# =============================================================================
+# Configures AWX (Ansible Tower) with all resources needed to run FNCM
+# deployments from the AWX web UI.
+#
+# Prerequisites:
+#   pip install awxkit                             # Python AWX client library
+#   ansible-galaxy collection install awx.awx     # AWX collection
+#
+# Usage (run LOCALLY — not inside AWX):
+#   ansible-playbook automation/ansible/playbooks/awx-bootstrap.yml \
+#     -e "awx_password=<your-admin-password>" \
+#     -e "ocp_api_token=<your-ocp-bearer-token>" \
+#     -e "github_repo_url=https://github.com/lloydngcobo/fncm-install"
+#
+# What is created in AWX:
+#   Organization : FNCM Automation
+#   Project      : fncm-install  (your GitHub repo)
+#   Credentials  : OpenShift API token credential
+#   Inventory    : FNCM Localhost (localhost, local connection)
+#   EE           : fncm-ee (custom EE with oc binary -- must be built first)
+#   Job Templates:
+#     - FNCM Full Install       (site.yml, all steps 1-8)
+#     - FNCM Teardown           (playbooks/teardown.yml)
+#     - FNCM Configure ArgoCD   (site.yml --tags argocd)
+#   Workflow     : FNCM Full Deploy (Install → ArgoCD, with approval node)
+#   Surveys      : Key variables on each template (passwords, namespace, etc.)
+# =============================================================================
+
+- name: AWX Bootstrap — Configure AWX for FNCM Automation
+  hosts: localhost
+  gather_facts: false
+  connection: local
+
+  vars:
+    # ── AWX Connection ──────────────────────────────────────────────────────
+    awx_url:      "http://localhost:30980"
+    awx_username: "admin"
+    awx_password: ""        # REQUIRED: pass via -e "awx_password=<pw>"
+
+    # ── OCP Credential (used by Job Templates) ──────────────────────────────
+    ocp_api_url:   "https://api.homelab.home.nl:6443"
+    ocp_api_token: ""       # REQUIRED: pass via -e "ocp_api_token=<token>"
+
+    # ── GitHub Repo (AWX Project source) ───────────────────────────────────
+    github_repo_url: "https://github.com/lloydngcobo/fncm-gitops"
+    github_branch:   "master"
+
+    # ── Custom EE image ─────────────────────────────────────────────────────
+    # Build with: ansible-builder build -t fncm-ee:latest -f automation/ansible/execution-environment.yml
+    # Then push to a registry accessible by AWX and set the full image path here.
+    #
+    # Examples:
+    #   ghcr.io/lloydngcobo/fncm-ee:latest          (GitHub Container Registry)
+    #   host.docker.internal:5000/fncm-ee:latest     (local Docker Desktop registry)
+    #   <dockerhub-username>/fncm-ee:latest          (Docker Hub)
+    #
+    # Override at runtime: ansible-playbook ... -e "fncm_ee_image=ghcr.io/lloydngcobo/fncm-ee:latest"
+    fncm_ee_image: "ghcr.io/lloydngcobo/fncm-ee:latest"
+
+    # ── AWX resource names ──────────────────────────────────────────────────
+    awx_org_name:      "FNCM Automation"
+    awx_project_name:  "fncm-install"
+    awx_inventory_name: "FNCM Localhost"
+    awx_ee_name:       "fncm-ee"
+    awx_ocp_cred_name: "OpenShift API"
+
+  pre_tasks:
+    - name: Validate required variables
+      ansible.builtin.assert:
+        that:
+          - awx_password | length > 0
+          - ocp_api_token | length > 0
+        fail_msg: >
+          Required variables missing.
+          Run with: -e "awx_password=<pw> ocp_api_token=<token>"
+
+  tasks:
+    # ── Organization ──────────────────────────────────────────────────────────
+    - name: "AWX | Create organization '{{ awx_org_name }}'"
+      awx.awx.organization:
+        name: "{{ awx_org_name }}"
+        description: "IBM FileNet Content Manager 5.7 Automation"
+        state: present
+        controller_host: "{{ awx_url }}"
+        controller_username: "{{ awx_username }}"
+        controller_password: "{{ awx_password }}"
+        validate_certs: false
+
+    # ── Custom Execution Environment ──────────────────────────────────────────
+    - name: "AWX | Register custom EE '{{ awx_ee_name }}'"
+      awx.awx.execution_environment:
+        name: "{{ awx_ee_name }}"
+        image: "{{ fncm_ee_image }}"
+        pull: missing
+        description: "FNCM EE with oc CLI, kubernetes.core, community.okd, awx.awx"
+        organization: "{{ awx_org_name }}"
+        state: present
+        controller_host: "{{ awx_url }}"
+        controller_username: "{{ awx_username }}"
+        controller_password: "{{ awx_password }}"
+        validate_certs: false
+
+    # ── Project ────────────────────────────────────────────────────────────────
+    - name: "AWX | Create project '{{ awx_project_name }}'"
+      awx.awx.project:
+        name: "{{ awx_project_name }}"
+        description: "IBM FNCM automated deployment playbooks"
+        organization: "{{ awx_org_name }}"
+        scm_type: git
+        scm_url: "{{ github_repo_url }}"
+        scm_branch: "{{ github_branch }}"
+        scm_update_on_launch: true
+        scm_clean: false
+        default_environment: "{{ awx_ee_name }}"
+        wait: false          # skip blocking on the initial sync
+        state: present
+        controller_host: "{{ awx_url }}"
+        controller_username: "{{ awx_username }}"
+        controller_password: "{{ awx_password }}"
+        validate_certs: false
+      register: _awx_project
+
+    - name: "AWX | Wait for project sync"
+      awx.awx.project_update:
+        project: "{{ awx_project_name }}"
+        organization: "{{ awx_org_name }}"
+        wait: true
+        interval: 5
+        timeout: 120
+        controller_host: "{{ awx_url }}"
+        controller_username: "{{ awx_username }}"
+        controller_password: "{{ awx_password }}"
+        validate_certs: false
+      ignore_errors: true    # non-fatal: fix repo URL in AWX UI if sync fails
+
+    # ── OpenShift Credential ──────────────────────────────────────────────────
+    - name: "AWX | Create OpenShift API credential"
+      awx.awx.credential:
+        name: "{{ awx_ocp_cred_name }}"
+        description: "Bearer token for api.homelab.home.nl:6443"
+        organization: "{{ awx_org_name }}"
+        credential_type: "OpenShift or Kubernetes API Bearer Token"
+        inputs:
+          host: "{{ ocp_api_url }}"
+          bearer_token: "{{ ocp_api_token }}"
+          verify_ssl: false
+        state: present
+        controller_host: "{{ awx_url }}"
+        controller_username: "{{ awx_username }}"
+        controller_password: "{{ awx_password }}"
+        validate_certs: false
+
+    # ── Inventory ──────────────────────────────────────────────────────────────
+    - name: "AWX | Create inventory '{{ awx_inventory_name }}'"
+      awx.awx.inventory:
+        name: "{{ awx_inventory_name }}"
+        description: "Localhost — ansible runs locally in the EE"
+        organization: "{{ awx_org_name }}"
+        state: present
+        controller_host: "{{ awx_url }}"
+        controller_username: "{{ awx_username }}"
+        controller_password: "{{ awx_password }}"
+        validate_certs: false
+
+    - name: "AWX | Add localhost host to inventory"
+      awx.awx.host:
+        name: localhost
+        inventory: "{{ awx_inventory_name }}"
+        variables:
+          ansible_connection: local
+          ansible_python_interpreter: "{{ '{{' }} ansible_playbook_python {{ '}}' }}"
+        state: present
+        controller_host: "{{ awx_url }}"
+        controller_username: "{{ awx_username }}"
+        controller_password: "{{ awx_password }}"
+        validate_certs: false
+
+    # ── Job Templates ──────────────────────────────────────────────────────────
+
+    # --- FNCM Full Install ---
+    - name: "AWX | Create job template: FNCM Full Install"
+      awx.awx.job_template:
+        name: "FNCM Full Install"
+        description: "Full FNCM 5.7 deployment: OpenLDAP, PostgreSQL, operator, CR, ArgoCD (steps 1-8)"
+        organization: "{{ awx_org_name }}"
+        project: "{{ awx_project_name }}"
+        playbook: "automation/ansible/site.yml"
+        inventory: "{{ awx_inventory_name }}"
+        execution_environment: "{{ awx_ee_name }}"
+        credentials:
+          - "{{ awx_ocp_cred_name }}"
+        ask_variables_on_launch: true
+        survey_enabled: true
+        survey_spec:
+          name: "FNCM Full Install Survey"
+          description: ""
+          spec:
+            - question_name: "IBM Entitlement Key"
+              question_description: "From https://myibm.ibm.com/products-services/containerlibrary"
+              variable: ibm_entitlement_key
+              type: password
+              required: true
+              default: ""
+            - question_name: "FNCM Namespace"
+              question_description: "OpenShift namespace for FNCM components"
+              variable: fncm_namespace
+              type: text
+              required: true
+              default: "fncm"
+            - question_name: "Storage Class"
+              question_description: "RWX-capable StorageClass name"
+              variable: storage_class_name
+              type: text
+              required: true
+              default: "nfs-homelab"
+            - question_name: "PostgreSQL Password"
+              variable: postgres_password
+              type: password
+              required: true
+              default: ""
+            - question_name: "LDAP Admin Password"
+              variable: ldap_admin_password
+              type: password
+              required: true
+              default: ""
+            - question_name: "FNCM Admin Password"
+              variable: fncm_admin_password
+              type: password
+              required: true
+              default: ""
+            - question_name: "Keystore Password"
+              variable: keystore_password
+              type: password
+              required: true
+              default: ""
+            - question_name: "Configure ArgoCD GitOps?"
+              variable: configure_argocd
+              type: multiplechoice
+              choices: "true\nfalse"
+              required: true
+              default: "false"
+            - question_name: "ArgoCD GitOps Repo URL"
+              question_description: "Leave blank to skip ArgoCD Application creation"
+              variable: argocd_gitops_repo_url
+              type: text
+              required: false
+              default: ""
+            - question_name: "FNCM License"
+              variable: fncm_license
+              type: multiplechoice
+              choices: "FNCM.PVUNonProd\nFNCM.PVUProd\nFNCM.UVU\nFNCM.CU"
+              required: true
+              default: "FNCM.PVUNonProd"
+        extra_vars:
+          ocp_api_url: "{{ ocp_api_url }}"
+        state: present
+        controller_host: "{{ awx_url }}"
+        controller_username: "{{ awx_username }}"
+        controller_password: "{{ awx_password }}"
+        validate_certs: false
+
+    # --- FNCM Teardown ---
+    - name: "AWX | Create job template: FNCM Teardown"
+      awx.awx.job_template:
+        name: "FNCM Teardown"
+        description: "Remove all FNCM namespaces and resources from OpenShift"
+        organization: "{{ awx_org_name }}"
+        project: "{{ awx_project_name }}"
+        playbook: "automation/ansible/playbooks/teardown.yml"
+        inventory: "{{ awx_inventory_name }}"
+        execution_environment: "{{ awx_ee_name }}"
+        credentials:
+          - "{{ awx_ocp_cred_name }}"
+        ask_variables_on_launch: false
+        survey_enabled: true
+        survey_spec:
+          name: "FNCM Teardown Survey"
+          description: ""
+          spec:
+            - question_name: "FNCM Namespace"
+              variable: fncm_namespace
+              type: text
+              required: true
+              default: "fncm"
+            - question_name: "Also remove FNCM CRDs?"
+              question_description: "WARNING: Only remove if no other FNCM deployments exist on this cluster"
+              variable: remove_crds
+              type: multiplechoice
+              choices: "false\ntrue"
+              required: true
+              default: "false"
+        extra_vars:
+          ocp_api_url: "{{ ocp_api_url }}"
+        state: present
+        controller_host: "{{ awx_url }}"
+        controller_username: "{{ awx_username }}"
+        controller_password: "{{ awx_password }}"
+        validate_certs: false
+
+    # --- FNCM Configure ArgoCD ---
+    - name: "AWX | Create job template: FNCM Configure ArgoCD"
+      awx.awx.job_template:
+        name: "FNCM Configure ArgoCD"
+        description: "Run step 8 only: configure ArgoCD GitOps Application for FNCM"
+        organization: "{{ awx_org_name }}"
+        project: "{{ awx_project_name }}"
+        playbook: "automation/ansible/site.yml"
+        job_tags: "argocd"
+        inventory: "{{ awx_inventory_name }}"
+        execution_environment: "{{ awx_ee_name }}"
+        credentials:
+          - "{{ awx_ocp_cred_name }}"
+        ask_variables_on_launch: true
+        survey_enabled: true
+        survey_spec:
+          name: "FNCM Configure ArgoCD Survey"
+          description: ""
+          spec:
+            - question_name: "FNCM Namespace"
+              variable: fncm_namespace
+              type: text
+              required: true
+              default: "fncm"
+            - question_name: "ArgoCD GitOps Repo URL"
+              variable: argocd_gitops_repo_url
+              type: text
+              required: true
+              default: "https://github.com/lloydngcobo/fncm-gitops"
+            - question_name: "ArgoCD GitOps Repo Path"
+              variable: argocd_gitops_repo_path
+              type: text
+              required: true
+              default: "manifests"
+            - question_name: "Enable Auto-Sync?"
+              variable: argocd_auto_sync
+              type: multiplechoice
+              choices: "false\ntrue"
+              required: true
+              default: "false"
+        extra_vars:
+          ocp_api_url: "{{ ocp_api_url }}"
+          configure_argocd: true
+        state: present
+        controller_host: "{{ awx_url }}"
+        controller_username: "{{ awx_username }}"
+        controller_password: "{{ awx_password }}"
+        validate_certs: false
+
+    # ── Workflow ───────────────────────────────────────────────────────────────
+    - name: "AWX | Create workflow: FNCM Full Deploy"
+      awx.awx.workflow_job_template:
+        name: "FNCM Full Deploy"
+        description: >
+          End-to-end FNCM deployment workflow:
+          Full Install → Approval Gate → Configure ArgoCD
+        organization: "{{ awx_org_name }}"
+        survey_enabled: false
+        ask_variables_on_launch: true
+        state: present
+        controller_host: "{{ awx_url }}"
+        controller_username: "{{ awx_username }}"
+        controller_password: "{{ awx_password }}"
+        validate_certs: false
+
+    - name: "AWX | Add workflow nodes: Install → Approval → ArgoCD"
+      awx.awx.workflow_job_template_node:
+        workflow_job_template: "FNCM Full Deploy"
+        organization: "{{ awx_org_name }}"
+        identifier: "{{ item.id }}"
+        unified_job_template: "{{ item.template | default(omit) }}"
+        approval_node: "{{ item.approval | default(omit) }}"
+        all_parents_must_converge: false
+        state: present
+        controller_host: "{{ awx_url }}"
+        controller_username: "{{ awx_username }}"
+        controller_password: "{{ awx_password }}"
+        validate_certs: false
+      loop:
+        - id: "node-install"
+          template: "FNCM Full Install"
+        - id: "node-approval"
+          approval: true
+          # approval_node is an AWX inline approval step
+        - id: "node-argocd"
+          template: "FNCM Configure ArgoCD"
+
+    # ── Summary ────────────────────────────────────────────────────────────────
+    - name: "AWX Bootstrap | Summary"
+      ansible.builtin.debug:
+        msg:
+          - "================================================"
+          - "  AWX Bootstrap Complete"
+          - "================================================"
+          - ""
+          - "  AWX URL      : {{ awx_url }}"
+          - "  Organization : {{ awx_org_name }}"
+          - ""
+          - "  Created:"
+          - "    Project      : {{ awx_project_name }} ({{ github_repo_url }})"
+          - "    Inventory    : {{ awx_inventory_name }}"
+          - "    Credential   : {{ awx_ocp_cred_name }}"
+          - "    EE           : {{ awx_ee_name }}"
+          - ""
+          - "  Job Templates:"
+          - "    - FNCM Full Install"
+          - "    - FNCM Teardown"
+          - "    - FNCM Configure ArgoCD"
+          - ""
+          - "  Workflow:"
+          - "    - FNCM Full Deploy (Install → Approval → ArgoCD)"
+          - ""
+          - "  Next steps:"
+          - "    1. Build custom EE: ansible-builder build -t {{ fncm_ee_image }}"
+          - "    2. Open {{ awx_url }} → Templates → FNCM Full Install"
+          - "    3. Click Launch → fill survey → monitor job"

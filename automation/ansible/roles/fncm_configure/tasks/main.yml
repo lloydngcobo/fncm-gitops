@@ -1,0 +1,216 @@
+---
+# Role: fncm_configure
+# Runs prerequisites.py gather (silent), patches property files,
+# runs generate, patches ICN SQL, applies SQL to PostgreSQL.
+
+# ── Step 5: Gather & Generate ─────────────────────────────────────────────────
+
+- name: Write silent prerequisites config
+  ansible.builtin.copy:
+    dest: "/tmp/silent_prereqs.toml"
+    content: |
+      NAMESPACE = "{{ fncm_namespace }}"
+      LICENSE = "{{ fncm_license }}"
+      PLATFORM = 1
+      INGRESS = false
+      AUTHENTICATION = 1
+      RESTRICTED_INTERNET_ACCESS = false
+      GENERATE_NETWORK_POLICIES = false
+      FIPS_SUPPORT = false
+      CPE = {{ deploy_cpe | lower }}
+      GRAPHQL = {{ deploy_graphql | lower }}
+      BAN = {{ deploy_ban | lower }}
+      CSS = {{ deploy_css | lower }}
+      CMIS = {{ deploy_cmis | lower }}
+      TM = {{ deploy_tm | lower }}
+      ES = {{ deploy_es | lower }}
+      IER = {{ deploy_ier | lower }}
+      ICCSAP = {{ deploy_iccsap | lower }}
+      DATABASE_TYPE = 4
+      DATABASE_SSL_ENABLE = false
+      DATABASE_OBJECT_STORE_COUNT = 1
+      SENDMAIL_SUPPORT = false
+      ICC_SUPPORT = false
+      TM_CUSTOM_GROUP_SUPPORT = false
+      CONTENT_INIT = true
+      CONTENT_VERIFY = true
+
+      [LDAP]
+      LDAP_TYPE = 2
+      LDAP_SSL_ENABLE = false
+
+      [IDP]
+      DISCOVERY_ENABLED = false
+      DISCOVERY_URL = ""
+    mode: "0600"
+
+- name: Copy silent prereqs config to install pod
+  ansible.builtin.shell: >
+    oc cp /tmp/silent_prereqs.toml
+    {{ install_namespace }}/install:/tmp/silent_prereqs.toml
+  changed_when: false
+
+- name: Run prerequisites.py gather (silent mode)
+  ansible.builtin.shell: >
+    oc exec -n {{ install_namespace }} install --
+    bash -c "cd {{ container_samples_path }}/scripts &&
+    python3 prerequisites.py --silent-config /tmp/silent_prereqs.toml gather"
+  register: gather_result
+  changed_when: true
+
+- name: Write property file patching script
+  ansible.builtin.copy:
+    dest: "/tmp/patch_properties.sh"
+    content: |
+      #!/bin/bash
+      set -e
+      PROP="{{ property_file_path }}"
+
+      find "$PROP" -name "*.toml" -exec cp {} {}.bck \;
+
+      sed -i \
+        -e 's/taskAdmins/{{ fncm_admin_group }}/g' \
+        -e 's/taskUsers/{{ fncm_user_group }}/g'   \
+        -e 's/taskAuditors/{{ fncm_admin_group }}/g' \
+        "$PROP/fncm_components_options.toml"
+
+      sed -i \
+        -e 's/DATABASE_SERVERNAME = "<Required>"/DATABASE_SERVERNAME = "{{ postgres_host }}"/g' \
+        -e '0,/DATABASE_NAME = "<Required>"/s//DATABASE_NAME = "{{ gcd_db_name }}"/'            \
+        -e '0,/DATABASE_USERNAME = """<Required>"""/s//DATABASE_USERNAME = """{{ gcd_db_user }}"""/' \
+        -e '0,/DATABASE_PASSWORD = """<Required>"""/s//DATABASE_PASSWORD = """{{ gcd_db_password }}"""/' \
+        -e '0,/DATABASE_NAME = "<Required>"/s//DATABASE_NAME = "{{ os1_db_name }}"/'            \
+        -e '0,/DATABASE_USERNAME = """<Required>"""/s//DATABASE_USERNAME = """{{ os1_db_user }}"""/' \
+        -e '0,/DATABASE_PASSWORD = """<Required>"""/s//DATABASE_PASSWORD = """{{ os1_db_password }}"""/' \
+        -e '0,/DATABASE_NAME = "<Required>"/s//DATABASE_NAME = "{{ icn_db_name }}"/'            \
+        -e '0,/DATABASE_USERNAME = """<Required>"""/s//DATABASE_USERNAME = """{{ icn_db_user }}"""/' \
+        -e '0,/DATABASE_PASSWORD = """<Required>"""/s//DATABASE_PASSWORD = """{{ icn_db_password }}"""/' \
+        -e '0,/TABLESPACE_NAME = "ICNDB"/s//TABLESPACE_NAME = "{{ icn_tablespace }}"/'          \
+        -e '0,/SCHEMA_NAME = "ICNDB"/s//SCHEMA_NAME = "{{ icn_schema }}"/'                      \
+        "$PROP/fncm_db_server.toml"
+
+      sed -i \
+        -e 's/SLOW_FILE_STORAGE_CLASSNAME = "<Required>"/SLOW_FILE_STORAGE_CLASSNAME = "{{ storage_class_name }}"/g'     \
+        -e 's/MEDIUM_FILE_STORAGE_CLASSNAME = "<Required>"/MEDIUM_FILE_STORAGE_CLASSNAME = "{{ storage_class_name }}"/g' \
+        -e 's/FAST_FILE_STORAGE_CLASSNAME = "<Required>"/FAST_FILE_STORAGE_CLASSNAME = "{{ storage_class_name }}"/g'     \
+        "$PROP/fncm_deployment.toml"
+
+      sed -i \
+        -e 's|LDAP_SERVER = "<Required>"|LDAP_SERVER = "{{ ldap_host }}"|g' \
+        -e 's|LDAP_PORT = "<Required>"|LDAP_PORT = "{{ ldap_port }}"|g'     \
+        -e 's|LDAP_BASE_DN = "<Required>"|LDAP_BASE_DN = "{{ ldap_root }}"|g' \
+        -e 's|LDAP_GROUP_BASE_DN = "<Required>"|LDAP_GROUP_BASE_DN = "ou=Groups,{{ ldap_root }}"|g' \
+        -e 's|LDAP_BIND_DN = """<Required>"""|LDAP_BIND_DN = """{{ ldap_bind_dn }}"""|g' \
+        -e 's|LDAP_BIND_DN_PASSWORD = """<Required>"""|LDAP_BIND_DN_PASSWORD = """{{ ldap_admin_password }}"""|g' \
+        -e 's|LDAP_USER_NAME_ATTRIBUTE = "\*:uid"|LDAP_USER_NAME_ATTRIBUTE = "*:cn"|g' \
+        -e 's|(uid=%v)(objectclass=person)|(uid=%v)(objectclass=inetOrgPerson)|g' \
+        -e 's|(objectclass=groupofnames)(objectclass=groupofuniquenames)(objectclass=groupofurls)|(objectclass=groupofnames)(objectclass=groupofuniquenames)|g' \
+        "$PROP/fncm_ldap_server.toml"
+
+      sed -i \
+        -e 's|KEYSTORE_PASSWORD = """<Required>"""|KEYSTORE_PASSWORD = """{{ keystore_password }}"""|g' \
+        -e 's|LTPA_PASSWORD = """<Required>"""|LTPA_PASSWORD = """{{ ltpa_password }}"""|g'             \
+        -e 's|FNCM_LOGIN_USER = """<Required>"""|FNCM_LOGIN_USER = """{{ fncm_admin_user }}"""|g'       \
+        -e 's|FNCM_LOGIN_PASSWORD = """<Required>"""|FNCM_LOGIN_PASSWORD = """{{ fncm_admin_password }}"""|g' \
+        -e 's|ICN_LOGIN_USER = """<Required>"""|ICN_LOGIN_USER = """{{ fncm_admin_user }}"""|g'         \
+        -e 's|ICN_LOGIN_PASSWORD = """<Required>"""|ICN_LOGIN_PASSWORD = """{{ fncm_admin_password }}"""|g' \
+        -e 's|GCD_ADMIN_USER_NAME = \["""<Required>"""\]|GCD_ADMIN_USER_NAME = ["""{{ fncm_admin_user }}"""]|g' \
+        -e 's|GCD_ADMIN_GROUPS_NAME = \["""<Required>"""\]|GCD_ADMIN_GROUPS_NAME = ["""{{ fncm_admin_group }}"""]|g' \
+        -e 's|CPE_OBJ_STORE_OS_ADMIN_USER_GROUPS = \["""<Required>"""\]|CPE_OBJ_STORE_OS_ADMIN_USER_GROUPS = ["""{{ fncm_admin_user }}""","""{{ fncm_admin_group }}"""]|g' \
+        "$PROP/fncm_user_group.toml"
+
+      echo "Property files patched."
+    mode: "0755"
+
+- name: Copy patch script to install pod
+  ansible.builtin.shell: >
+    oc cp /tmp/patch_properties.sh
+    {{ install_namespace }}/install:/tmp/patch_properties.sh
+  changed_when: false
+
+- name: Execute property file patching
+  ansible.builtin.shell: >
+    oc exec -n {{ install_namespace }} install --
+    bash -c "chmod +x /tmp/patch_properties.sh && /tmp/patch_properties.sh"
+  changed_when: true
+
+- name: Run prerequisites.py generate
+  ansible.builtin.shell: >
+    oc exec -n {{ install_namespace }} install --
+    bash -c "cd {{ container_samples_path }}/scripts && python3 prerequisites.py generate"
+  register: generate_result
+  changed_when: true
+
+# ── Step 6: Apply SQL ─────────────────────────────────────────────────────────
+
+- name: Patch ICN SQL - replace ICNDB with custom tablespace/schema names
+  ansible.builtin.shell: >
+    oc exec -n {{ install_namespace }} install --
+    bash -c "sed -i
+    -e 's/tablespace ICNDB/tablespace {{ icn_tablespace }}/g'
+    -e 's/SCHEMA IF NOT EXISTS ICNDB/SCHEMA IF NOT EXISTS {{ icn_schema }}/g'
+    -e 's/search_path TO ICNDB/search_path TO {{ icn_schema }}/g'
+    {{ generated_files_path }}/database/createICN.sql"
+  changed_when: true
+
+- name: Get PostgreSQL pod name
+  ansible.builtin.shell: >
+    oc get pod -n {{ postgresql_namespace }}
+    -l app=fncm-postgresql
+    -o jsonpath='{.items[0].metadata.name}'
+  register: pg_pod
+  changed_when: false
+
+- name: Copy SQL files from install pod to local
+  ansible.builtin.shell: >
+    oc cp {{ install_namespace }}/install:{{ generated_files_path }}/database
+    /tmp/fncm-database
+  changed_when: false
+
+- name: Copy SQL files from local to PostgreSQL pod
+  ansible.builtin.shell: >
+    oc cp /tmp/fncm-database
+    {{ postgresql_namespace }}/{{ pg_pod.stdout }}:/usr/dbscript
+  changed_when: false
+
+- name: Create ICN tablespace directory
+  ansible.builtin.shell: >
+    oc exec -n {{ postgresql_namespace }} {{ pg_pod.stdout }} --
+    bash -c "mkdir -p /pgsqldata/{{ icn_tablespace }} &&
+    chown postgres:postgres /pgsqldata/{{ icn_tablespace }}"
+  changed_when: true
+
+- name: Apply createICN.sql
+  ansible.builtin.shell: >
+    oc exec -n {{ postgresql_namespace }} {{ pg_pod.stdout }} --
+    bash -c "psql postgresql://{{ postgres_user }}@localhost:5432/{{ postgres_db }}
+    --file=/usr/dbscript/createICN.sql"
+  changed_when: true
+
+- name: Create OS1 tablespace directories
+  ansible.builtin.shell: >
+    oc exec -n {{ postgresql_namespace }} {{ pg_pod.stdout }} --
+    bash -c "mkdir -p /pgsqldata/{{ os1_db_name }}/{data,index} &&
+    chown -R postgres:postgres /pgsqldata/{{ os1_db_name }}"
+  changed_when: true
+
+- name: Apply createos.sql
+  ansible.builtin.shell: >
+    oc exec -n {{ postgresql_namespace }} {{ pg_pod.stdout }} --
+    bash -c "psql postgresql://{{ postgres_user }}@localhost:5432/{{ postgres_db }}
+    --file=/usr/dbscript/createos.sql"
+  changed_when: true
+
+- name: Create GCD tablespace directory
+  ansible.builtin.shell: >
+    oc exec -n {{ postgresql_namespace }} {{ pg_pod.stdout }} --
+    bash -c "mkdir -p /pgsqldata/{{ gcd_db_name }} &&
+    chown postgres:postgres /pgsqldata/{{ gcd_db_name }}"
+  changed_when: true
+
+- name: Apply createGCD.sql
+  ansible.builtin.shell: >
+    oc exec -n {{ postgresql_namespace }} {{ pg_pod.stdout }} --
+    bash -c "psql postgresql://{{ postgres_user }}@localhost:5432/{{ postgres_db }}
+    --file=/usr/dbscript/createGCD.sql"
+  changed_when: true

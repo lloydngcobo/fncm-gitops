@@ -1,0 +1,136 @@
+---
+# Role: install_client
+# Creates the fncm-install namespace, PVC, ClusterRoleBinding, and install pod.
+
+- name: Create fncm-install Project
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: Project
+      apiVersion: project.openshift.io/v1
+      metadata:
+        name: "{{ install_namespace }}"
+        labels:
+          app: fncm-install
+
+- name: Create install PVC
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: PersistentVolumeClaim
+      apiVersion: v1
+      metadata:
+        name: install
+        namespace: "{{ install_namespace }}"
+        labels:
+          app: fncm-install
+      spec:
+        accessModes: [ReadWriteMany]
+        resources:
+          requests:
+            storage: 1Gi
+        storageClassName: "{{ storage_class_name }}"
+        volumeMode: Filesystem
+
+- name: Create ClusterRoleBinding for install SA
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: ClusterRoleBinding
+      apiVersion: rbac.authorization.k8s.io/v1
+      metadata:
+        name: cluster-admin-fncm-install
+        labels:
+          app: fncm-install
+      subjects:
+        - kind: User
+          apiGroup: rbac.authorization.k8s.io
+          name: "system:serviceaccount:{{ install_namespace }}:default"
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: ClusterRole
+        name: cluster-admin
+
+- name: Check if install pod already exists
+  kubernetes.core.k8s_info:
+    kind: Pod
+    name: install
+    namespace: "{{ install_namespace }}"
+  register: install_pod_info
+
+- name: Create install pod
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: Pod
+      apiVersion: v1
+      metadata:
+        name: install
+        namespace: "{{ install_namespace }}"
+        labels:
+          app: fncm-install
+      spec:
+        containers:
+          - name: install
+            securityContext:
+              privileged: true
+            image: "{{ ubi_image }}"
+            command: ["/bin/bash"]
+            args:
+              - "-c"
+              - |
+                set -e
+                cd /usr
+                yum install podman ncurses jq python3.9 python3.9-pip git -y
+                curl -LO '{{ jdk_url }}'
+                tar -xzf ibm-semeru-open-jdk_x64_linux_21.0.4_7_openj9-0.46.1.tar.gz
+                ln -fs /usr/{{ jdk_dir }}/bin/java /usr/bin/java
+                ln -fs /usr/{{ jdk_dir }}/bin/keytool /usr/bin/keytool
+                curl -k https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux.tar.gz --output oc.tar
+                tar -xvf oc.tar oc && chmod u+x oc && ln -fs /usr/oc /usr/bin/oc
+                curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+                chmod u+x kubectl && ln -fs /usr/kubectl /usr/bin/kubectl
+                curl -LO https://github.com/mikefarah/yq/releases/download/v4.30.5/yq_linux_amd64.tar.gz
+                tar -xzvf yq_linux_amd64.tar.gz && ln -fs /usr/yq_linux_amd64 /usr/bin/yq
+                pip3 install typer~=0.15.1 rich~=13.9.4 kubernetes==32.0.1 toml~=0.10.2 \
+                  requests~=2.32.3 xmltodict~=0.14.2 PyYAML~=6.0.2 tomlkit~=0.13.2 \
+                  cryptography~=44.0.1 docker~=7.1.0 urllib3~=2.2.3 pyOpenSSL~=25.0.0 \
+                  Jinja2~=3.1.6 packaging~=24.2 ruamel.yaml==0.18.10
+                git clone {{ fncm_repo_url }} {{ container_samples_path }}
+                touch /usr/install/.setup_complete
+                while true; do echo 'Install pod - Ready'; sleep 300; done
+            imagePullPolicy: IfNotPresent
+            volumeMounts:
+              - name: install
+                mountPath: /usr/install
+        volumes:
+          - name: install
+            persistentVolumeClaim:
+              claimName: install
+  when: install_pod_info.resources | length == 0
+
+- name: Wait for install pod to be Running
+  kubernetes.core.k8s_info:
+    kind: Pod
+    name: install
+    namespace: "{{ install_namespace }}"
+    wait: true
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: 120
+  register: pod_ready
+
+- name: Wait for one-time setup to complete (up to 25 min)
+  ansible.builtin.shell: >
+    oc exec -n {{ install_namespace }} install --
+    bash -c "test -f /usr/install/.setup_complete && echo DONE"
+  register: setup_result
+  retries: 30
+  delay: 60
+  until: setup_result.rc == 0 and 'DONE' in setup_result.stdout
+  changed_when: false
+
+- name: Install client ready
+  ansible.builtin.debug:
+    msg: "Install pod is fully configured and ready."

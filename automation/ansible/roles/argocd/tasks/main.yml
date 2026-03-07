@@ -1,0 +1,306 @@
+---
+# =============================================================================
+# ArgoCD Role — Step 8: Configure OpenShift GitOps (ArgoCD)
+# =============================================================================
+# Mirrors automation/powershell/steps/08-configure-argocd.ps1
+#
+# What this role does:
+#   8a  Verify the ArgoCD instance in argocd_namespace is Available
+#   8b  Retrieve ArgoCD URL and admin password
+#   8c  Grant ArgoCD controller access to the FNCM namespace
+#   8d  Create / update the ArgoCD Application resource
+#   8e  Strip the kubectl-client-side-apply annotation + clear managedFields
+#       so ArgoCD can do a clean server-side apply without migration conflicts
+#   8f  Hard-refresh the Application (forces re-read from cluster)
+#   8g  Export the live FNCMCluster manifest to the local GitOps repo path
+#   8h  Print summary with ArgoCD URL and git push instructions
+# =============================================================================
+
+# ── Guard ─────────────────────────────────────────────────────────────────────
+- name: "ArgoCD | Skip if configure_argocd is false"
+  ansible.builtin.debug:
+    msg: "ArgoCD configuration skipped (configure_argocd=false). Set configure_argocd=true to enable."
+  when: not configure_argocd | bool
+
+- name: "ArgoCD | End play if configure_argocd is false"
+  ansible.builtin.meta: end_host
+  when: not configure_argocd | bool
+
+# ── 8a: Verify ArgoCD instance ────────────────────────────────────────────────
+- name: "ArgoCD [8a] | Fetch ArgoCD instance info"
+  kubernetes.core.k8s_info:
+    api_version: argoproj.io/v1alpha1
+    kind: ArgoCD
+    name: openshift-gitops
+    namespace: "{{ argocd_namespace }}"
+  register: argocd_instance
+  retries: 20
+  delay: 15
+  until: >
+    argocd_instance.resources | length > 0 and
+    (argocd_instance.resources[0].status.phase | default('')) == 'Available'
+
+- name: "ArgoCD [8a] | Assert ArgoCD is Available"
+  ansible.builtin.assert:
+    that:
+      - argocd_instance.resources | length > 0
+      - argocd_instance.resources[0].status.phase == 'Available'
+    fail_msg: >
+      ArgoCD instance 'openshift-gitops' not found or not Available in namespace '{{ argocd_namespace }}'.
+      Ensure the OpenShift GitOps operator is installed:
+        oc get subscription openshift-gitops-operator -n openshift-operators
+        oc get csv -n openshift-gitops
+      Then re-run with --tags argocd
+
+- name: "ArgoCD [8a] | Confirmed Available"
+  ansible.builtin.debug:
+    msg: "ArgoCD instance found (phase: {{ argocd_instance.resources[0].status.phase }})."
+
+# ── 8b: Retrieve ArgoCD URL and admin password ────────────────────────────────
+- name: "ArgoCD [8b] | Get ArgoCD server route"
+  ansible.builtin.shell: >
+    oc get route openshift-gitops-server -n {{ argocd_namespace }}
+    -o jsonpath='{.spec.host}'
+  register: argocd_route_result
+  changed_when: false
+  failed_when: false
+
+- name: "ArgoCD [8b] | Set ArgoCD URL"
+  ansible.builtin.set_fact:
+    argocd_url: >-
+      {{ 'https://' + argocd_route_result.stdout
+         if argocd_route_result.rc == 0 and argocd_route_result.stdout
+         else '<route not found>' }}
+
+- name: "ArgoCD [8b] | Fetch admin password secret"
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Secret
+    name: openshift-gitops-cluster
+    namespace: "{{ argocd_namespace }}"
+  register: argocd_secret
+
+- name: "ArgoCD [8b] | Decode admin password"
+  ansible.builtin.set_fact:
+    argocd_admin_password: >-
+      {{ argocd_secret.resources[0].data['admin.password'] | b64decode
+         if argocd_secret.resources | length > 0
+         else '<check secret openshift-gitops-cluster in ' + argocd_namespace + '>' }}
+
+- name: "ArgoCD [8b] | Display access info"
+  ansible.builtin.debug:
+    msg:
+      - "ArgoCD URL      : {{ argocd_url }}"
+      - "ArgoCD username : admin"
+      - "ArgoCD password : {{ argocd_admin_password }}"
+
+# ── 8c: Grant ArgoCD controller access to FNCM namespace ──────────────────────
+- name: "ArgoCD [8c] | Grant ArgoCD controller admin access to '{{ fncm_namespace }}'"
+  ansible.builtin.shell: >
+    oc adm policy add-role-to-user admin
+    system:serviceaccount:{{ argocd_namespace }}:openshift-gitops-argocd-application-controller
+    -n {{ fncm_namespace }}
+  changed_when: false
+  failed_when: false
+  register: argocd_rbac_result
+
+- name: "ArgoCD [8c] | RBAC result"
+  ansible.builtin.debug:
+    msg: "{{ argocd_rbac_result.stdout | default('(no output)') }}"
+
+# ── 8d: Create / update ArgoCD Application ────────────────────────────────────
+- name: "ArgoCD [8d] | Skip Application creation (no repo URL)"
+  ansible.builtin.debug:
+    msg: >
+      No argocd_gitops_repo_url configured -- skipping Application creation.
+      Set argocd_gitops_repo_url in group_vars/all.yml or as a survey variable.
+  when: argocd_gitops_repo_url | length == 0
+
+- name: "ArgoCD [8d] | Build automated sync policy block"
+  ansible.builtin.set_fact:
+    _argocd_automated_block: |
+      automated:
+            prune: {{ argocd_prune | bool | lower }}
+            selfHeal: {{ argocd_self_heal | bool | lower }}
+  when: argocd_auto_sync | bool
+
+- name: "ArgoCD [8d] | Create / update ArgoCD Application"
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: argoproj.io/v1alpha1
+      kind: Application
+      metadata:
+        name: "{{ argocd_app_name }}"
+        namespace: "{{ argocd_namespace }}"
+        finalizers:
+          - resources-finalizer.argocd.argoproj.io
+        labels:
+          fncm.ibm.com/managed-by: fncm-ansible-automation
+      spec:
+        project: default
+        source:
+          repoURL: "{{ argocd_gitops_repo_url }}"
+          targetRevision: "{{ argocd_gitops_revision }}"
+          path: "{{ argocd_gitops_repo_path }}"
+        destination:
+          server: https://kubernetes.default.svc
+          namespace: "{{ fncm_namespace }}"
+        # The FNCM operator (field manager: OpenAPI-Generator) continuously stamps
+        # fields onto the FNCMCluster CR during every reconcile cycle.  Without
+        # ignoreDifferences, ArgoCD sees perpetual OutOfSync and fights the operator.
+        # managedFieldsManagers skips fields owned by OpenAPI-Generator when diffing.
+        ignoreDifferences:
+          - group: fncm.ibm.com
+            kind: FNCMCluster
+            managedFieldsManagers:
+              - OpenAPI-Generator
+            jsonPointers:
+              - /metadata/annotations
+              - /metadata/generation
+              - /metadata/resourceVersion
+              - /metadata/finalizers
+        syncPolicy:
+          "{{ _argocd_automated_block | default('') }}"
+          retry:
+            limit: 5
+            backoff:
+              duration: 5s
+              factor: 2
+              maxDuration: 3m
+          syncOptions:
+            - CreateNamespace=false
+            - ApplyOutOfSyncOnly=true
+            - ServerSideApply=true
+  when: argocd_gitops_repo_url | length > 0
+
+- name: "ArgoCD [8d] | Application created/updated"
+  ansible.builtin.debug:
+    msg:
+      - "Application '{{ argocd_app_name }}' configured:"
+      - "  Repository : {{ argocd_gitops_repo_url }}"
+      - "  Path       : {{ argocd_gitops_repo_path }}"
+      - "  Revision   : {{ argocd_gitops_revision }}"
+      - "  Target NS  : {{ fncm_namespace }}"
+      - "  Auto-sync  : {{ argocd_auto_sync }}"
+      - "  Self-heal  : {{ argocd_self_heal }}"
+      - "  Prune      : {{ argocd_prune }}"
+  when: argocd_gitops_repo_url | length > 0
+
+# ── 8e: Strip annotation + clear managedFields ────────────────────────────────
+# The install playbook creates the FNCMCluster CR via kubernetes.core.k8s which
+# uses server-side apply (kubectl manager).  If the resource was previously applied
+# with kubectl apply (client-side), the kubectl-client-side-apply annotation causes
+# ArgoCD's SSA migration to fail with a 409 conflict.  We strip both the annotation
+# and managedFields so ArgoCD starts with a clean server-side apply slate.
+- name: "ArgoCD [8e] | Strip kubectl-client-side-apply annotation from FNCMCluster"
+  ansible.builtin.shell: >
+    oc annotate fncmclusters.fncm.ibm.com fncmdeploy
+    kubectl.kubernetes.io/last-applied-configuration-
+    -n {{ fncm_namespace }}
+  changed_when: false
+  failed_when: false
+  register: argocd_annotate_result
+
+- name: "ArgoCD [8e] | Annotation removal result"
+  ansible.builtin.debug:
+    msg: "{{ argocd_annotate_result.stderr | default('Annotation already absent or removed.') }}"
+  when: argocd_annotate_result.rc != 0
+
+- name: "ArgoCD [8e] | Clear managedFields from FNCMCluster (clean SSA start)"
+  ansible.builtin.shell: >
+    oc patch fncmclusters.fncm.ibm.com fncmdeploy
+    -n {{ fncm_namespace }}
+    --type=json
+    -p '[{"op":"remove","path":"/metadata/managedFields"}]'
+  changed_when: false
+  failed_when: false
+  register: argocd_patch_result
+
+- name: "ArgoCD [8e] | managedFields cleared"
+  ansible.builtin.debug:
+    msg: "managedFields cleared -- ArgoCD server-side apply will start clean."
+  when: argocd_patch_result.rc == 0
+
+# ── 8f: Hard-refresh ArgoCD Application ──────────────────────────────────────
+- name: "ArgoCD [8f] | Hard-refresh Application (forces cluster re-read)"
+  ansible.builtin.shell: >
+    oc annotate application {{ argocd_app_name }}
+    argocd.argoproj.io/refresh=hard
+    -n {{ argocd_namespace }}
+    --overwrite
+  changed_when: false
+  failed_when: false
+  when: argocd_gitops_repo_url | length > 0
+
+# ── 8g: Export live FNCMCluster manifest ──────────────────────────────────────
+- name: "ArgoCD [8g] | Fetch live FNCMCluster spec"
+  kubernetes.core.k8s_info:
+    api_version: fncm.ibm.com/v1
+    kind: FNCMCluster
+    name: fncmdeploy
+    namespace: "{{ fncm_namespace }}"
+  register: fncm_cr_live
+  when: argocd_gitops_repo_url | length > 0
+
+- name: "ArgoCD [8g] | Build clean manifest (strip status and managedFields)"
+  ansible.builtin.set_fact:
+    _fncm_manifest_clean: >-
+      {{
+        fncm_cr_live.resources[0]
+        | combine({'status': omit, 'metadata': (fncm_cr_live.resources[0].metadata
+            | combine({'managedFields': omit, 'resourceVersion': omit,
+                       'uid': omit, 'generation': omit,
+                       'annotations': (fncm_cr_live.resources[0].metadata.annotations
+                         | default({})
+                         | dict2items
+                         | rejectattr('key', 'equalto', 'kubectl.kubernetes.io/last-applied-configuration')
+                         | items2dict)
+                     })
+          )})
+      }}
+  when:
+    - argocd_gitops_repo_url | length > 0
+    - fncm_cr_live.resources | length > 0
+
+- name: "ArgoCD [8g] | Ensure local GitOps manifest directory exists"
+  ansible.builtin.file:
+    path: "{{ argocd_gitops_local_repo_path }}/{{ argocd_gitops_repo_path }}"
+    state: directory
+    mode: "0755"
+  when:
+    - argocd_gitops_repo_url | length > 0
+    - _fncm_manifest_clean is defined
+
+- name: "ArgoCD [8g] | Write FNCMCluster manifest to GitOps repo path"
+  ansible.builtin.copy:
+    content: "{{ _fncm_manifest_clean | to_nice_yaml(indent=2) }}"
+    dest: "{{ argocd_gitops_local_repo_path }}/{{ argocd_gitops_repo_path }}/fncmcluster.yaml"
+    mode: "0644"
+  when:
+    - argocd_gitops_repo_url | length > 0
+    - _fncm_manifest_clean is defined
+
+# ── 8h: Summary ───────────────────────────────────────────────────────────────
+- name: "ArgoCD [8h] | Summary"
+  ansible.builtin.debug:
+    msg:
+      - "================================================"
+      - "  ArgoCD GitOps Configuration Complete"
+      - "================================================"
+      - ""
+      - "  ArgoCD UI   : {{ argocd_url }}"
+      - "  Login       : admin  /  {{ argocd_admin_password }}"
+      - ""
+      - "  Manifest exported to:"
+      - "    {{ argocd_gitops_local_repo_path }}/{{ argocd_gitops_repo_path }}/fncmcluster.yaml"
+      - ""
+      - "  Push to Git to complete ArgoCD setup:"
+      - "    git -C {{ argocd_gitops_local_repo_path }} add {{ argocd_gitops_repo_path }}/"
+      - "    git -C {{ argocd_gitops_local_repo_path }} status"
+      - "    git -C {{ argocd_gitops_local_repo_path }} commit -m 'chore: refresh FNCMCluster manifest'"
+      - "    git -C {{ argocd_gitops_local_repo_path }} push"
+      - ""
+      - "  Check sync status:"
+      - "    oc get application {{ argocd_app_name }} -n {{ argocd_namespace }}"
+  when: argocd_gitops_repo_url | length > 0

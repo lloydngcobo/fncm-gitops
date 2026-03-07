@@ -1,0 +1,184 @@
+---
+# Role: postgresql
+# Deploys PostgreSQL into the fncm-postgresql namespace.
+
+- name: Create fncm-postgresql Project
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: Project
+      apiVersion: project.openshift.io/v1
+      metadata:
+        name: "{{ postgresql_namespace }}"
+        labels:
+          app: fncm-postgresql
+
+- name: Create privileged RoleBinding for PostgreSQL SA
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: RoleBinding
+      apiVersion: rbac.authorization.k8s.io/v1
+      metadata:
+        name: postgresql-privileged
+        namespace: "{{ postgresql_namespace }}"
+        labels:
+          app: fncm-postgresql
+      subjects:
+        - kind: ServiceAccount
+          name: default
+          namespace: "{{ postgresql_namespace }}"
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: ClusterRole
+        name: system:openshift:scc:privileged
+
+- name: Create PostgreSQL config Secret
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: Secret
+      apiVersion: v1
+      metadata:
+        name: postgresql-config
+        namespace: "{{ postgresql_namespace }}"
+        labels:
+          app: fncm-postgresql
+      stringData:
+        POSTGRES_DB: "{{ postgres_db }}"
+        POSTGRES_USER: "{{ postgres_user }}"
+        POSTGRES_PASSWORD: "{{ postgres_password }}"
+
+- name: Create PostgreSQL data PVC
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: PersistentVolumeClaim
+      apiVersion: v1
+      metadata:
+        name: postgresql-data
+        namespace: "{{ postgresql_namespace }}"
+        labels:
+          app: fncm-postgresql
+      spec:
+        accessModes: [ReadWriteMany]
+        resources:
+          requests:
+            storage: 5Gi
+        storageClassName: "{{ storage_class_name }}"
+        volumeMode: Filesystem
+
+- name: Create PostgreSQL tablespaces PVC
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: PersistentVolumeClaim
+      apiVersion: v1
+      metadata:
+        name: postgresql-tablespaces
+        namespace: "{{ postgresql_namespace }}"
+        labels:
+          app: fncm-postgresql
+      spec:
+        accessModes: [ReadWriteMany]
+        resources:
+          requests:
+            storage: 5Gi
+        storageClassName: "{{ storage_class_name }}"
+        volumeMode: Filesystem
+
+- name: Create PostgreSQL StatefulSet
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: postgresql
+        namespace: "{{ postgresql_namespace }}"
+        labels:
+          app: fncm-postgresql
+      spec:
+        serviceName: postgresql
+        replicas: 1
+        selector:
+          matchLabels:
+            app: fncm-postgresql
+        template:
+          metadata:
+            labels:
+              app: fncm-postgresql
+          spec:
+            containers:
+              - name: postgresql
+                image: "{{ postgresql_image }}"
+                imagePullPolicy: IfNotPresent
+                args: ["-c", "max_prepared_transactions=500", "-c", "max_connections=500"]
+                securityContext:
+                  privileged: true
+                ports:
+                  - containerPort: 5432
+                resources:
+                  requests:
+                    memory: 2Gi
+                  limits:
+                    memory: 4Gi
+                livenessProbe:
+                  exec:
+                    command: ["/bin/sh", "-c", "exec pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
+                  initialDelaySeconds: 30
+                  periodSeconds: 10
+                  failureThreshold: 6
+                  timeoutSeconds: 5
+                readinessProbe:
+                  exec:
+                    command: ["/bin/sh", "-c", "exec pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
+                  initialDelaySeconds: 5
+                  periodSeconds: 10
+                  failureThreshold: 6
+                  timeoutSeconds: 5
+                startupProbe:
+                  exec:
+                    command: ["/bin/sh", "-c", "exec pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
+                  periodSeconds: 10
+                  failureThreshold: 18
+                envFrom:
+                  - secretRef:
+                      name: postgresql-config
+                volumeMounts:
+                  - mountPath: /var/lib/postgresql/data
+                    name: postgresql-data
+                  - mountPath: /pgsqldata
+                    name: postgresql-tablespaces
+            volumes:
+              - name: postgresql-data
+                persistentVolumeClaim:
+                  claimName: postgresql-data
+              - name: postgresql-tablespaces
+                persistentVolumeClaim:
+                  claimName: postgresql-tablespaces
+
+- name: Create PostgreSQL Service
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: Service
+      apiVersion: v1
+      metadata:
+        name: postgresql
+        namespace: "{{ postgresql_namespace }}"
+        labels:
+          app: fncm-postgresql
+      spec:
+        type: NodePort
+        ports:
+          - port: 5432
+        selector:
+          app: fncm-postgresql
+
+- name: Wait for PostgreSQL StatefulSet to be ready
+  ansible.builtin.shell: >
+    oc rollout status statefulset/postgresql
+    -n {{ postgresql_namespace }}
+    --timeout=300s
+  changed_when: false

@@ -1,0 +1,79 @@
+---
+# =============================================================================
+# IBM FNCM Automated Deployment - Main Playbook
+# =============================================================================
+# Prerequisites:
+#   pip install ansible kubernetes
+#   ansible-galaxy collection install kubernetes.core
+#   oc login <cluster>  (or set ocp_token in group_vars/all.yml)
+#
+# Usage:
+#   ansible-playbook -i inventory.yml site.yml
+#   ansible-playbook -i inventory.yml site.yml --tags openldap,postgresql
+#   ansible-playbook -i inventory.yml site.yml --skip-tags install_client
+#   ansible-playbook -i inventory.yml site.yml --tags argocd   # step 8 only
+# =============================================================================
+
+- name: IBM FNCM Automated Deployment
+  hosts: localhost
+  gather_facts: false
+
+  pre_tasks:
+    - name: Log in to OpenShift (if token provided)
+      ansible.builtin.shell: >
+        oc login --server={{ ocp_api_url }}
+        --token={{ ocp_token }}
+        --insecure-skip-tls-verify
+      when: ocp_token | length > 0
+      changed_when: false
+
+    - name: Verify oc login
+      ansible.builtin.shell: oc whoami
+      register: oc_whoami
+      changed_when: false
+      failed_when: oc_whoami.rc != 0
+
+    - name: Display active user
+      ansible.builtin.debug:
+        msg: "Authenticated as: {{ oc_whoami.stdout }}"
+
+    - name: Warn if IBM_ENTITLEMENT_KEY is empty
+      ansible.builtin.debug:
+        msg: "WARNING: ibm_entitlement_key is not set. Operator image pull will fail."
+      when: ibm_entitlement_key | length == 0
+
+  roles:
+    - role: install_client
+      tags: [install_client, step1]
+
+    - role: openldap
+      tags: [openldap, step2, prereqs]
+
+    - role: postgresql
+      tags: [postgresql, step3, prereqs]
+
+    - role: fncm_operator
+      tags: [fncm_operator, step4]
+
+    - role: fncm_configure
+      tags: [fncm_configure, step5, step6]
+
+    - role: fncm_deploy
+      tags: [fncm_deploy, step7]
+
+    - role: argocd
+      tags: [argocd, step8]
+      when: configure_argocd | default(false) | bool
+
+  post_tasks:
+    - name: Display access information
+      ansible.builtin.debug:
+        msg:
+          - "FNCM deployment complete!"
+          - "Check access URLs:"
+          - "  oc get cm fncmdeploy-fncm-access-info -n {{ fncm_namespace }} -o yaml"
+          - ""
+          - "ArgoCD GitOps:"
+          - "  Enabled : {{ configure_argocd | default(false) }}"
+          - "  Repo    : {{ argocd_gitops_repo_url | default('(not configured)') }}"
+          - "  App     : {{ argocd_app_name | default('fncm-deploy') }} in {{ argocd_namespace | default('openshift-gitops') }}"

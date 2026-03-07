@@ -1,0 +1,84 @@
+---
+# =============================================================================
+# Custom Ansible Execution Environment for IBM FNCM Automation
+# =============================================================================
+# The default AWX EE (quay.io/ansible/awx-ee:latest) includes kubernetes.core
+# and community.okd but LACKS the 'oc' binary required by several FNCM roles
+# (oc exec, oc cp, oc adm policy, oc project, etc.).
+#
+# This EE extends the default AWX EE with:
+#   - oc CLI (OpenShift client)
+#   - awx.awx collection (for awx-bootstrap.yml)
+#   - Updated Python kubernetes / openshift clients
+#
+# Build:
+#   pip install ansible-builder
+#   ansible-builder build -t fncm-ee:latest -f automation/ansible/execution-environment.yml
+#
+# Test locally:
+#   docker run --rm fncm-ee:latest oc version --client
+#   docker run --rm fncm-ee:latest ansible --version
+#
+# Use in AWX:
+#   1. Tag and push to a registry accessible by AWX:
+#      docker tag fncm-ee:latest localhost:5000/fncm-ee:latest
+#      docker push localhost:5000/fncm-ee:latest
+#   2. In AWX: Administration → Execution Environments → Add
+#      Name: fncm-ee
+#      Image: localhost:5000/fncm-ee:latest   (or your registry URL)
+#   3. Assign to Job Templates that run FNCM playbooks
+# =============================================================================
+
+version: 3
+
+images:
+  base_image:
+    name: quay.io/ansible/awx-ee:latest
+
+dependencies:
+  # ansible_core / ansible_runner must be explicit so EE build's check_ansible
+  # can find them in the final image's Python path (awx-ee:latest places ansible
+  # under /usr/local/lib/python3.11, which differs from the system /usr/bin/python3).
+  ansible_core:
+    package_pip: ansible-core>=2.15.0
+
+  ansible_runner:
+    package_pip: ansible-runner>=2.4.0
+
+  galaxy:
+    collections:
+      - name: awx.awx
+        version: ">=23.0.0"
+      - name: kubernetes.core
+        version: ">=2.4.0"
+      # NOTE: community.okd is intentionally excluded from the EE even though it is
+      # listed in collections/requirements.yml for local dev installs.  Installing it
+      # here pulls in the 'openshift' Python package, which requires ovirt-imageio and
+      # ovirt-engine-sdk-python — both needing native C compilation that fails on the
+      # RHEL 9 / Python 3.9 final image stage.  Our playbooks only use kubernetes.core
+      # modules and the oc CLI; community.okd is not exercised at runtime.
+      - name: ansible.posix
+        version: ">=1.5.0"
+
+  python:
+    - kubernetes>=24.2.0
+    - jinja2>=3.1.0
+
+  # Exclude packages that require native C compilation and have no pre-built wheel
+  # for RHEL 9 / Python 3.9. These are pulled in transitively via the 'openshift'
+  # optional dependency of kubernetes.core — they are not needed at runtime.
+  exclude:
+    python:
+      - openshift
+      - ovirt-imageio
+      - ovirt-engine-sdk-python
+
+additional_build_steps:
+  # Download and install the stable OpenShift client (oc + kubectl)
+  # into /usr/local/bin so it is on PATH inside the EE.
+  prepend_final:
+    - >-
+      RUN curl -fsSL
+      https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux.tar.gz
+      | tar -xz -C /usr/local/bin oc kubectl
+      && oc version --client

@@ -1,0 +1,111 @@
+---
+# Role: fncm_deploy
+# Applies network policies, secrets, patches and applies the FNCM CR.
+
+- name: Apply permissive egress NetworkPolicy to fncm namespace
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: NetworkPolicy
+      apiVersion: networking.k8s.io/v1
+      metadata:
+        name: custom-permit-all-egress
+        namespace: "{{ fncm_namespace }}"
+      spec:
+        podSelector: {}
+        policyTypes:
+          - Egress
+        egress:
+          - to:
+              - ipBlock:
+                  cidr: "{{ network_cidr }}"
+                  except: []
+
+- name: Apply permissive egress NetworkPolicy to install namespace
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: NetworkPolicy
+      apiVersion: networking.k8s.io/v1
+      metadata:
+        name: custom-permit-all-egress
+        namespace: "{{ install_namespace }}"
+      spec:
+        podSelector: {}
+        policyTypes:
+          - Egress
+        egress:
+          - to:
+              - ipBlock:
+                  cidr: "{{ network_cidr }}"
+                  except: []
+
+- name: Patch CR - change LDAP type to Custom (for OpenLDAP)
+  ansible.builtin.shell: >
+    oc exec -n {{ install_namespace }} install --
+    bash -c "
+    CR={{ generated_files_path }}/ibm_fncm_cr_production.yaml &&
+    cp \$CR \$CR.bak &&
+    sed -i
+    -e 's/lc_selected_ldap_type: IBM Security Directory Server/lc_selected_ldap_type: Custom/g'
+    -e 's/tds:/custom:/g'
+    \$CR &&
+    echo 'CR patched.'"
+  changed_when: true
+
+- name: Apply LDAP bind secret
+  ansible.builtin.shell: >
+    oc exec -n {{ install_namespace }} install --
+    bash -c "oc apply -f {{ generated_files_path }}/secrets/ldap-bind-secret.yaml
+    -n {{ fncm_namespace }}"
+  changed_when: true
+
+- name: Apply FNCM secret
+  ansible.builtin.shell: >
+    oc exec -n {{ install_namespace }} install --
+    bash -c "oc apply -f {{ generated_files_path }}/secrets/ibm-fncm-secret.yaml
+    -n {{ fncm_namespace }}"
+  changed_when: true
+
+- name: Apply BAN secret
+  ansible.builtin.shell: >
+    oc exec -n {{ install_namespace }} install --
+    bash -c "oc apply -f {{ generated_files_path }}/secrets/ibm-ban-secret.yaml
+    -n {{ fncm_namespace }}"
+  changed_when: true
+
+- name: Apply FNCM Custom Resource
+  ansible.builtin.shell: >
+    oc exec -n {{ install_namespace }} install --
+    bash -c "oc apply -f {{ generated_files_path }}/ibm_fncm_cr_production.yaml
+    -n {{ fncm_namespace }}"
+  register: cr_apply
+  changed_when: true
+
+- name: Show CR apply output
+  ansible.builtin.debug:
+    var: cr_apply.stdout_lines
+
+- name: Wait for FNCMCluster to reach Ready condition
+  ansible.builtin.shell: >
+    oc get FNCMCluster fncmdeploy -n {{ fncm_namespace }}
+    -o jsonpath='{.status.conditions[*].type}'
+  register: fncm_conditions
+  retries: 90
+  delay: 60
+  until: "'Ready' in fncm_conditions.stdout"
+  changed_when: false
+
+- name: Show final component status
+  ansible.builtin.shell: >
+    oc get FNCMCluster fncmdeploy -n {{ fncm_namespace }}
+    -o jsonpath='{.status.components}'
+  register: fncm_status
+  changed_when: false
+
+- name: Display FNCM status
+  ansible.builtin.debug:
+    msg:
+      - "FNCM deployment complete!"
+      - "Components: {{ fncm_status.stdout }}"
+      - "Access info: oc get cm fncmdeploy-fncm-access-info -n {{ fncm_namespace }} -o yaml"

@@ -1,0 +1,60 @@
+---
+# Role: fncm_operator
+# Creates the FNCM namespace and deploys the FNCM operator via deployoperator.py.
+
+- name: Create FNCM namespace
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: Project
+      apiVersion: project.openshift.io/v1
+      metadata:
+        name: "{{ fncm_namespace }}"
+        labels:
+          app: fncm
+
+- name: Write deployoperator silent config to temp file
+  ansible.builtin.copy:
+    dest: "/tmp/silent_deployoperator.toml"
+    content: |
+      LICENSE_ACCEPT = true
+      PLATFORM = 1
+      NAMESPACE = "{{ fncm_namespace }}"
+      ENTITLEMENT_KEY = "{{ ibm_entitlement_key }}"
+      PRIVATE_REGISTRY = false
+      PRIVATE_REGISTRY_URL = ""
+      PRIVATE_REGISTRY_USERNAME = ""
+      PRIVATE_REGISTRY_PASSWORD = ""
+      PRIVATE_REGISTRY_SSL_ENABLED = false
+      PRIVATE_REGISTRY_SSL_CRT_PATH = ""
+      GLOBAL_CATALOG = false
+    mode: "0600"
+
+- name: Copy silent config to install pod
+  ansible.builtin.shell: >
+    oc cp /tmp/silent_deployoperator.toml
+    {{ install_namespace }}/install:/tmp/silent_deployoperator.toml
+  changed_when: false
+
+- name: Run deployoperator.py in silent mode
+  ansible.builtin.shell: >
+    oc exec -n {{ install_namespace }} install --
+    bash -c "cd {{ container_samples_path }}/scripts &&
+    python3 deployoperator.py --silent-config /tmp/silent_deployoperator.toml"
+  register: deploy_op_result
+  changed_when: true
+
+- name: Show deployoperator output
+  ansible.builtin.debug:
+    var: deploy_op_result.stdout_lines
+
+- name: Wait for FNCM operator deployment to be ready
+  ansible.builtin.shell: >
+    oc rollout status deployment/ibm-fncm-operator
+    -n {{ fncm_namespace }}
+    --timeout=300s
+  register: op_ready
+  retries: 3
+  delay: 30
+  until: op_ready.rc == 0
+  changed_when: false

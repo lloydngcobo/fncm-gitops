@@ -1,0 +1,27 @@
+---
+# =============================================================================
+# Ansible Collection Requirements for IBM FNCM Automation
+# =============================================================================
+# Install all collections:
+#   ansible-galaxy collection install -r automation/ansible/collections/requirements.yml
+#
+# Individual installs:
+#   ansible-galaxy collection install kubernetes.core community.okd awx.awx ansible.posix
+# =============================================================================
+
+collections:
+  # Kubernetes / OpenShift resource management (k8s, k8s_info, k8s_exec modules)
+  - name: kubernetes.core
+    version: ">=2.4.0"
+
+  # OpenShift-specific resources (OCP routes, projects, SCCs)
+  - name: community.okd
+    version: ">=2.3.0"
+
+  # AWX / Ansible Controller API management (used by awx-bootstrap.yml)
+  - name: awx.awx
+    version: ">=23.0.0"
+
+  # POSIX utilities (synchronize, sysctl, etc.)
+  - name: ansible.posix
+    version: ">=1.5.0"

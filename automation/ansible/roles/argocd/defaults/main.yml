@@ -1,0 +1,33 @@
+---
+# =============================================================================
+# ArgoCD Role Defaults
+# =============================================================================
+# Override any of these in group_vars/all.yml or as AWX survey variables.
+
+# Set to false to skip ArgoCD configuration entirely
+configure_argocd: false
+
+# Namespace where OpenShift GitOps / ArgoCD is installed
+argocd_namespace: "openshift-gitops"
+
+# Name of the ArgoCD Application resource to create/update
+argocd_app_name: "fncm-deploy"
+
+# GitOps repository that holds the desired FNCM manifests.
+# Leave blank to skip Application creation (ArgoCD will still be verified).
+argocd_gitops_repo_url: ""
+
+# Directory inside the repo containing FNCM manifests
+argocd_gitops_repo_path: "manifests"
+
+# Branch, tag, or commit SHA for ArgoCD to track
+argocd_gitops_revision: "HEAD"
+
+# Local path (inside the execution environment) to clone / export manifests to.
+# After the role runs, the manifest at this path must be committed and pushed to git.
+argocd_gitops_local_repo_path: "/tmp/fncm-gitops"
+
+# Sync policy: all false = manual sync (drift detection only, no auto-apply)
+argocd_auto_sync: false
+argocd_self_heal: false
+argocd_prune:     false

@@ -1,0 +1,204 @@
+---
+# =============================================================================
+# IBM FNCM Teardown Playbook
+# =============================================================================
+# Removes all FNCM-related resources from the OpenShift cluster.
+#
+# Usage:
+#   ansible-playbook -i automation/ansible/inventory.yml \
+#                    automation/ansible/playbooks/teardown.yml
+#
+# What is removed:
+#   - ArgoCD Application (fncm-deploy) from openshift-gitops namespace
+#   - fncm namespace (FNCMCluster CR, all operator-created resources)
+#   - fncm-openldap namespace
+#   - fncm-postgresql namespace
+#   - fncm-install namespace (install pod, PVC)
+#   - ClusterRoleBinding cluster-admin-fncm-install
+#
+# What is NOT removed (cluster-level infrastructure):
+#   - OpenShift GitOps operator
+#   - FNCM operator CRDs (intentional -- removal can break other FNCM deployments)
+#   - Storage class / NFS provisioner
+#
+# To also remove FNCM CRDs (destructive, shared cluster risk):
+#   ansible-playbook ... teardown.yml -e remove_crds=true
+# =============================================================================
+
+- name: IBM FNCM Teardown
+  hosts: localhost
+  gather_facts: false
+  vars:
+    remove_crds: false    # set to true via -e remove_crds=true to also delete CRDs
+
+  pre_tasks:
+    - name: Verify oc login
+      ansible.builtin.shell: oc whoami
+      register: oc_whoami
+      changed_when: false
+      failed_when: oc_whoami.rc != 0
+
+    - name: Display active user
+      ansible.builtin.debug:
+        msg: "Authenticated as: {{ oc_whoami.stdout }} -- beginning teardown."
+
+    - name: Warn about destructive action
+      ansible.builtin.pause:
+        prompt: >
+          WARNING: This will delete the fncm, fncm-openldap, fncm-postgresql,
+          and fncm-install namespaces and ALL resources within them.
+          Press ENTER to continue or Ctrl+C to abort.
+
+  tasks:
+    # ── ArgoCD Application ─────────────────────────────────────────────────────
+    - name: "Teardown | Strip ArgoCD Application finalizer"
+      ansible.builtin.shell: >
+        oc patch application {{ argocd_app_name }}
+        -n {{ argocd_namespace }}
+        --type=merge
+        -p '{"metadata":{"finalizers":[]}}'
+      changed_when: false
+      failed_when: false
+      register: _argocd_patch
+
+    - name: "Teardown | Remove ArgoCD Application '{{ argocd_app_name }}'"
+      kubernetes.core.k8s:
+        state: absent
+        api_version: argoproj.io/v1alpha1
+        kind: Application
+        name: "{{ argocd_app_name }}"
+        namespace: "{{ argocd_namespace }}"
+        wait: true
+        wait_timeout: 60
+      failed_when: false
+
+    - name: "Teardown | ArgoCD Application removed"
+      ansible.builtin.debug:
+        msg: "ArgoCD Application '{{ argocd_app_name }}' removed from '{{ argocd_namespace }}'."
+
+    # ── FNCM namespace ─────────────────────────────────────────────────────────
+    - name: "Teardown | Scale FNCM operator to 0 (unblock finalizers)"
+      ansible.builtin.shell: >
+        oc scale deployment ibm-fncm-operator
+        --replicas=0
+        -n {{ fncm_namespace }}
+      changed_when: false
+      failed_when: false
+
+    - name: "Teardown | Strip FNCMCluster finalizers"
+      ansible.builtin.shell: >
+        oc patch fncmclusters.fncm.ibm.com fncmdeploy
+        -n {{ fncm_namespace }}
+        --type=json
+        -p '[{"op":"replace","path":"/metadata/finalizers","value":[]}]'
+      changed_when: false
+      failed_when: false
+
+    - name: "Teardown | Delete FNCMCluster CR"
+      kubernetes.core.k8s:
+        state: absent
+        api_version: fncm.ibm.com/v1
+        kind: FNCMCluster
+        name: fncmdeploy
+        namespace: "{{ fncm_namespace }}"
+        wait: true
+        wait_timeout: 60
+      failed_when: false
+
+    - name: "Teardown | Delete fncm namespace"
+      kubernetes.core.k8s:
+        state: absent
+        api_version: v1
+        kind: Namespace
+        name: "{{ fncm_namespace }}"
+        wait: true
+        wait_timeout: 300
+      failed_when: false
+      register: _fncm_ns_delete
+
+    - name: "Teardown | fncm namespace status"
+      ansible.builtin.debug:
+        msg: "fncm namespace deletion: {{ 'complete' if _fncm_ns_delete.changed else 'already absent' }}"
+
+    # ── OpenLDAP namespace ─────────────────────────────────────────────────────
+    - name: "Teardown | Delete fncm-openldap namespace"
+      kubernetes.core.k8s:
+        state: absent
+        api_version: v1
+        kind: Namespace
+        name: "{{ openldap_namespace }}"
+        wait: true
+        wait_timeout: 120
+      failed_when: false
+
+    # ── PostgreSQL namespace ───────────────────────────────────────────────────
+    - name: "Teardown | Delete fncm-postgresql namespace"
+      kubernetes.core.k8s:
+        state: absent
+        api_version: v1
+        kind: Namespace
+        name: "{{ postgresql_namespace }}"
+        wait: true
+        wait_timeout: 120
+      failed_when: false
+
+    # ── Install namespace + cluster RBAC ──────────────────────────────────────
+    - name: "Teardown | Delete fncm-install namespace"
+      kubernetes.core.k8s:
+        state: absent
+        api_version: v1
+        kind: Namespace
+        name: "{{ install_namespace }}"
+        wait: true
+        wait_timeout: 120
+      failed_when: false
+
+    - name: "Teardown | Delete ClusterRoleBinding cluster-admin-fncm-install"
+      kubernetes.core.k8s:
+        state: absent
+        kind: ClusterRoleBinding
+        name: cluster-admin-fncm-install
+      failed_when: false
+
+    # ── Optional: CRD removal ─────────────────────────────────────────────────
+    - name: "Teardown | Remove FNCM CRDs (only if remove_crds=true)"
+      kubernetes.core.k8s:
+        state: absent
+        kind: CustomResourceDefinition
+        name: "{{ item }}"
+      loop:
+        - fncmclusters.fncm.ibm.com
+        - fncmoperators.fncm.ibm.com
+      failed_when: false
+      when: remove_crds | bool
+
+    # ── Summary ────────────────────────────────────────────────────────────────
+    - name: "Teardown | Verify namespaces are gone"
+      ansible.builtin.shell: >
+        oc get project {{ fncm_namespace }} {{ openldap_namespace }}
+        {{ postgresql_namespace }} {{ install_namespace }} 2>&1 || true
+      register: _ns_check
+      changed_when: false
+
+    - name: "Teardown | Summary"
+      ansible.builtin.debug:
+        msg:
+          - "================================================"
+          - "  FNCM Teardown Complete"
+          - "================================================"
+          - ""
+          - "  Removed:"
+          - "    - ArgoCD Application: {{ argocd_app_name }}"
+          - "    - Namespace: {{ fncm_namespace }}"
+          - "    - Namespace: {{ openldap_namespace }}"
+          - "    - Namespace: {{ postgresql_namespace }}"
+          - "    - Namespace: {{ install_namespace }}"
+          - "    - ClusterRoleBinding: cluster-admin-fncm-install"
+          - "    - CRDs: {{ 'removed' if remove_crds | bool else 'preserved (use -e remove_crds=true to remove)' }}"
+          - ""
+          - "  Preserved (cluster infrastructure):"
+          - "    - OpenShift GitOps operator"
+          - "    - Storage class: {{ storage_class_name }}"
+          - ""
+          - "  Remaining namespaces check:"
+          - "{{ _ns_check.stdout_lines | to_nice_yaml }}"
