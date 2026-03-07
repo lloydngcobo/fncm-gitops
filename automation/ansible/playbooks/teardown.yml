@@ -28,6 +28,8 @@
 - name: IBM FNCM Teardown
   hosts: localhost
   gather_facts: false
+  vars_files:
+    - "../group_vars/all.yml"
   vars:
     remove_crds: false    # set to true via -e remove_crds=true to also delete CRDs
 
