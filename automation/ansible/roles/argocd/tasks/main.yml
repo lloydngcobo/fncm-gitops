@@ -116,13 +116,28 @@
       Set argocd_gitops_repo_url in group_vars/all.yml or as a survey variable.
   when: argocd_gitops_repo_url | length == 0
 
-- name: "ArgoCD [8d] | Build automated sync policy block"
+- name: "ArgoCD [8d] | Build syncPolicy dict"
   ansible.builtin.set_fact:
-    _argocd_automated_block: |
-      automated:
-            prune: {{ argocd_prune | bool | lower }}
-            selfHeal: {{ argocd_self_heal | bool | lower }}
-  when: argocd_auto_sync | bool
+    # Build the syncPolicy as a pure Python dict so Ansible can pass it
+    # directly to kubernetes.core.k8s without any YAML-inside-Jinja2 tricks.
+    # The 'automated' key is merged in only when argocd_auto_sync is true.
+    _argocd_sync_policy: >-
+      {{
+        {
+          'retry': {
+            'limit': 5,
+            'backoff': {'duration': '5s', 'factor': 2, 'maxDuration': '3m'}
+          },
+          'syncOptions': [
+            'CreateNamespace=false',
+            'ApplyOutOfSyncOnly=true',
+            'ServerSideApply=true'
+          ]
+        } | combine(
+          {'automated': {'prune': argocd_prune | bool, 'selfHeal': argocd_self_heal | bool}}
+          if argocd_auto_sync | bool else {}
+        )
+      }}
 
 - name: "ArgoCD [8d] | Create / update ArgoCD Application"
   kubernetes.core.k8s:
@@ -160,18 +175,7 @@
               - /metadata/generation
               - /metadata/resourceVersion
               - /metadata/finalizers
-        syncPolicy:
-          "{{ _argocd_automated_block | default('') }}"
-          retry:
-            limit: 5
-            backoff:
-              duration: 5s
-              factor: 2
-              maxDuration: 3m
-          syncOptions:
-            - CreateNamespace=false
-            - ApplyOutOfSyncOnly=true
-            - ServerSideApply=true
+        syncPolicy: "{{ _argocd_sync_policy }}"
   when: argocd_gitops_repo_url | length > 0
 
 - name: "ArgoCD [8d] | Application created/updated"
