@@ -181,8 +181,8 @@
 - name: Create ICN tablespace directory
   ansible.builtin.shell: >
     oc exec -n {{ postgresql_namespace }} {{ pg_pod.stdout }} --
-    bash -c "mkdir -p /pgsqldata/{{ icn_tablespace }} &&
-    chown postgres:postgres /pgsqldata/{{ icn_tablespace }}"
+    bash -c "mkdir -p /pgsqldata/{{ icn_schema }} &&
+    chown postgres:postgres /pgsqldata/{{ icn_schema }}"
   changed_when: true
 
 - name: Apply createICN.sql
