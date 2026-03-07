@@ -15,7 +15,9 @@
 
 - name: Write deployoperator silent config to temp file
   ansible.builtin.copy:
-    dest: "/tmp/silent_deployoperator.toml"
+    # deployoperator.py --silent reads from scripts/silent_config/silent_install_deployoperator.toml
+    # inside the container (same path the PowerShell step 4 uses).
+    dest: "/tmp/silent_install_deployoperator.toml"
     content: |
       LICENSE_ACCEPT = true
       PLATFORM = 1
@@ -32,15 +34,15 @@
 
 - name: Copy silent config to install pod
   ansible.builtin.shell: >
-    oc cp /tmp/silent_deployoperator.toml
-    {{ install_namespace }}/install:/tmp/silent_deployoperator.toml
+    oc cp /tmp/silent_install_deployoperator.toml
+    {{ install_namespace }}/install:{{ container_samples_path }}/scripts/silent_config/silent_install_deployoperator.toml
   changed_when: false
 
 - name: Run deployoperator.py in silent mode
   ansible.builtin.shell: >
     oc exec -n {{ install_namespace }} install --
     bash -c "cd {{ container_samples_path }}/scripts &&
-    python3 deployoperator.py --silent-config /tmp/silent_deployoperator.toml"
+    python3 deployoperator.py --silent"
   register: deploy_op_result
   changed_when: true
 
