@@ -79,6 +79,11 @@
         echo "==> Skipping fncm_components_options.toml (TM not enabled)"
       fi
 
+      # Patch GCD and OS1 first (always present, appear first in the toml).
+      # IMPORTANT: ICN is patched LAST because the toml section order is:
+      #   GCD → OS1 → [OS2 → OS3 if IER] → ICN
+      # Patching ICN before OS2/OS3 would shift the slot assignments causing
+      # wrong database names in the generated CR (devicn ends up as OS2, etc.)
       sed -i \
         -e 's/DATABASE_SERVERNAME = "<Required>"/DATABASE_SERVERNAME = "{{ postgres_host }}"/g' \
         -e '0,/DATABASE_NAME = "<Required>"/s//DATABASE_NAME = "{{ gcd_db_name }}"/'            \
@@ -87,11 +92,6 @@
         -e '0,/DATABASE_NAME = "<Required>"/s//DATABASE_NAME = "{{ os1_db_name }}"/'            \
         -e '0,/DATABASE_USERNAME = """<Required>"""/s//DATABASE_USERNAME = """{{ os1_db_user }}"""/' \
         -e '0,/DATABASE_PASSWORD = """<Required>"""/s//DATABASE_PASSWORD = """{{ os1_db_password }}"""/' \
-        -e '0,/DATABASE_NAME = "<Required>"/s//DATABASE_NAME = "{{ icn_db_name }}"/'            \
-        -e '0,/DATABASE_USERNAME = """<Required>"""/s//DATABASE_USERNAME = """{{ icn_db_user }}"""/' \
-        -e '0,/DATABASE_PASSWORD = """<Required>"""/s//DATABASE_PASSWORD = """{{ icn_db_password }}"""/' \
-        -e '0,/TABLESPACE_NAME = "ICNDB"/s//TABLESPACE_NAME = "{{ icn_tablespace }}"/'          \
-        -e '0,/SCHEMA_NAME = "ICNDB"/s//SCHEMA_NAME = "{{ icn_schema }}"/'                      \
         "$PROP/fncm_db_server.toml"
 
       if [ "{{ deploy_ier | lower }}" = "true" ]; then
@@ -109,6 +109,15 @@
           -e '0,/DATABASE_PASSWORD = """<Required>"""/s//DATABASE_PASSWORD = """{{ os3_db_password }}"""/' \
           "$PROP/fncm_db_server.toml"
       fi
+
+      echo "==> Patching fncm_db_server.toml - ICN database (always last slot)..."
+      sed -i \
+        -e '0,/DATABASE_NAME = "<Required>"/s//DATABASE_NAME = "{{ icn_db_name }}"/'            \
+        -e '0,/DATABASE_USERNAME = """<Required>"""/s//DATABASE_USERNAME = """{{ icn_db_user }}"""/' \
+        -e '0,/DATABASE_PASSWORD = """<Required>"""/s//DATABASE_PASSWORD = """{{ icn_db_password }}"""/' \
+        -e '0,/TABLESPACE_NAME = "ICNDB"/s//TABLESPACE_NAME = "{{ icn_tablespace }}"/'          \
+        -e '0,/SCHEMA_NAME = "ICNDB"/s//SCHEMA_NAME = "{{ icn_schema }}"/'                      \
+        "$PROP/fncm_db_server.toml"
 
       sed -i \
         -e 's/SLOW_FILE_STORAGE_CLASSNAME = "<Required>"/SLOW_FILE_STORAGE_CLASSNAME = "{{ storage_class_name }}"/g'     \
