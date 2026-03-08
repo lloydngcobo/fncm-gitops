@@ -1,235 +1,305 @@
-apiVersion: fncm.ibm.com/v1
-kind: FNCMCluster
-metadata:
-  annotations:
-    kubectl.kubernetes.io/last-applied-configuration: |
-      {"apiVersion":"fncm.ibm.com/v1","kind":"FNCMCluster","metadata":{"annotations":{},"labels":{"app.kubernetes.io/instance":"ibm-fncm","app.kubernetes.io/managed-by":"ibm-fncm","app.kubernetes.io/name":"ibm-fncm","release":"5.7.0"},"name":"fncmdeploy","namespace":"fncm"},"spec":{"appVersion":"25.0.0","content_optional_components":{"ban":true,"cmis":false,"cpe":true,"css":true,"es":true,"graphql":true,"iccsap":false,"ier":true,"tm":true},"datasource_configuration":{"dc_gcd_datasource":{"database_name":"devgcd","database_port":"5432","database_servername":"postgresql.fncm-postgresql.svc.cluster.local","dc_common_gcd_datasource_name":"FNGCDDS","dc_common_gcd_xa_datasource_name":"FNGCDDSXA","dc_database_type":"postgresql","dc_hadr_validation_timeout":15},"dc_icn_datasource":{"database_name":"devicn","database_port":"5432","database_servername":"postgresql.fncm-postgresql.svc.cluster.local","dc_common_icn_datasource_name":"ECMClientDS","dc_database_type":"postgresql","dc_hadr_validation_timeout":15},"dc_os_datasources":[{"database_name":"devos1","database_port":"5432","database_servername":"postgresql.fncm-postgresql.svc.cluster.local","dc_common_os_datasource_name":"FNOS1DS","dc_common_os_xa_datasource_name":"FNOS1DSXA","dc_database_type":"postgresql","dc_hadr_validation_timeout":15,"dc_os_label":"os"},{"database_name":"devos2","database_port":"5432","database_servername":"postgresql.fncm-postgresql.svc.cluster.local","dc_common_os_datasource_name":"FNOS2DS","dc_common_os_xa_datasource_name":"FNOS2DSXA","dc_database_type":"postgresql","dc_hadr_validation_timeout":15,"dc_os_label":"os2"},{"database_name":"devos3","database_port":"5432","database_servername":"postgresql.fncm-postgresql.svc.cluster.local","dc_common_os_datasource_name":"FNOS3DS","dc_common_os_xa_datasource_name":"FNOS3DSXA","dc_database_type":"postgresql","dc_hadr_validation_timeout":15,"dc_os_label":"os3"}],"dc_ssl_enabled":false},"initialize_configuration":{"ic_ldap_creation":{"ic_ldap_admin_user_name":["cpadmin"],"ic_ldap_admins_groups_name":["cpadmins"]},"ic_obj_store_creation":{"object_stores":[{"oc_cpe_obj_store_admin_user_groups":["cpadmin","cpadmins"],"oc_cpe_obj_store_conn":{"dc_os_datasource_name":"FNOS1DS","dc_os_xa_datasource_name":"FNOS1DSXA","name":"os_dbconnection"},"oc_cpe_obj_store_display_name":"os","oc_cpe_obj_store_enable_workflow":true,"oc_cpe_obj_store_symb_name":"os","oc_cpe_obj_store_workflow_admin_group":"cpadmin","oc_cpe_obj_store_workflow_config_group":"cpadmin","oc_cpe_obj_store_workflow_data_tbl_space":"devos1_tbs","oc_cpe_obj_store_workflow_date_time_mask":"mm/dd/yy hh:tt am","oc_cpe_obj_store_workflow_index_tbl_space":"devos1indexts","oc_cpe_obj_store_workflow_locale":"en","oc_cpe_obj_store_workflow_pe_conn_point_name":"os_pe_conn_point","oc_cpe_obj_store_workflow_region_name":"os_region","oc_cpe_obj_store_workflow_region_number":1},{"oc_cpe_obj_store_admin_user_groups":["cpadmin","cpadmins"],"oc_cpe_obj_store_conn":{"dc_os_datasource_name":"FNOS2DS","dc_os_xa_datasource_name":"FNOS2DSXA","name":"os2_dbconnection"},"oc_cpe_obj_store_display_name":"os2","oc_cpe_obj_store_enable_workflow":true,"oc_cpe_obj_store_symb_name":"os2","oc_cpe_obj_store_workflow_admin_group":"cpadmin","oc_cpe_obj_store_workflow_config_group":"cpadmin","oc_cpe_obj_store_workflow_data_tbl_space":"devos2_tbs","oc_cpe_obj_store_workflow_date_time_mask":"mm/dd/yy hh:tt am","oc_cpe_obj_store_workflow_index_tbl_space":"devos2indexts","oc_cpe_obj_store_workflow_locale":"en","oc_cpe_obj_store_workflow_pe_conn_point_name":"os2_pe_conn_point","oc_cpe_obj_store_workflow_region_name":"os2_region","oc_cpe_obj_store_workflow_region_number":1},{"oc_cpe_obj_store_admin_user_groups":["cpadmin","cpadmins"],"oc_cpe_obj_store_conn":{"dc_os_datasource_name":"FNOS3DS","dc_os_xa_datasource_name":"FNOS3DSXA","name":"os3_dbconnection"},"oc_cpe_obj_store_display_name":"os3","oc_cpe_obj_store_enable_workflow":true,"oc_cpe_obj_store_symb_name":"os3","oc_cpe_obj_store_workflow_admin_group":"cpadmin","oc_cpe_obj_store_workflow_config_group":"cpadmin","oc_cpe_obj_store_workflow_data_tbl_space":"devos3_tbs","oc_cpe_obj_store_workflow_date_time_mask":"mm/dd/yy hh:tt am","oc_cpe_obj_store_workflow_index_tbl_space":"devos3indexts","oc_cpe_obj_store_workflow_locale":"en","oc_cpe_obj_store_workflow_pe_conn_point_name":"os3_pe_conn_point","oc_cpe_obj_store_workflow_region_name":"os3_region","oc_cpe_obj_store_workflow_region_number":1}]}},"ldap_configuration":{"custom":{"lc_group_filter":"(\u0026(cn=%v)(|(objectclass=groupofnames)(objectclass=groupofuniquenames)))","lc_user_filter":"(\u0026(uid=%v)(objectclass=inetOrgPerson))"},"lc_bind_secret":"ldap-bind-secret","lc_ldap_base_dn":"dc=cp,dc=internal","lc_ldap_group_base_dn":"ou=Groups,dc=cp,dc=internal","lc_ldap_group_display_name_attr":"cn","lc_ldap_group_member_id_map":"groupofnames:member","lc_ldap_group_membership_search_filter":"(|(\u0026(objectclass=groupofnames)(member=%v))(\u0026(objectclass=groupofuniquenames)(uniquemember=%v)))","lc_ldap_group_name_attribute":"*:cn","lc_ldap_port":"389","lc_ldap_precheck":true,"lc_ldap_server":"openldap.fncm-openldap.svc.cluster.local","lc_ldap_ssl_enabled":false,"lc_ldap_user_display_name_attr":"uid","lc_ldap_user_name_attribute":"*:cn","lc_selected_ldap_type":"Custom","tds":{"lc_group_filter":"(\u0026(cn=%v)(|(objectclass=groupofnames)(objectclass=groupofuniquenames)))","lc_user_filter":"(\u0026(uid=%v)(objectclass=inetOrgPerson))"}},"license":{"accept":true},"navigator_configuration":{"icn_production_setting":{"icn_schema":"devicn","icn_table_space":"devicn_tbs"}},"shared_configuration":{"enable_fips":false,"image_pull_secrets":["ibm-entitlement-key"],"root_ca_secret":"fncm-root-ca","sc_content_initialization":true,"sc_content_verification":true,"sc_deployment_context":"FNCM","sc_deployment_patterns":"content","sc_deployment_platform":"OCP","sc_deployment_profile_size":"small","sc_deployment_type":"production","sc_fncm_license_model":"FNCM.PVUNonProd","sc_generate_sample_network_policies":false,"sc_image_repository":"cp.icr.io","sc_run_as_user":null,"storage_configuration":{"sc_fast_file_storage_classname":"nfs-homelab","sc_medium_file_storage_classname":"nfs-homelab","sc_slow_file_storage_classname":"nfs-homelab"},"trusted_certificate_list":[]},"verify_configuration":{"vc_cpe_verification":{"vc_cpe_cbr":[{"cbr_cpe_class_name":"Document","cbr_cpe_obj_store_name":"os","cbr_cpe_search_string":"is a simple"},{"cbr_cpe_class_name":"Document","cbr_cpe_obj_store_name":"os2","cbr_cpe_search_string":"is a simple"},{"cbr_cpe_class_name":"Document","cbr_cpe_obj_store_name":"os3","cbr_cpe_search_string":"is a simple"}],"vc_cpe_document":[{"doc_cpe_class_name":"Document","doc_cpe_doc_content":"This is a simple document test for os","doc_cpe_doc_content_name":"os_content","doc_cpe_doc_title":"os_TestDocument","doc_cpe_folder_name":"/os_TestFolder","doc_cpe_obj_store_name":"os"},{"doc_cpe_class_name":"Document","doc_cpe_doc_content":"This is a simple document test for os2","doc_cpe_doc_content_name":"os2_content","doc_cpe_doc_title":"os2_TestDocument","doc_cpe_folder_name":"/os2_TestFolder","doc_cpe_obj_store_name":"os2"},{"doc_cpe_class_name":"Document","doc_cpe_doc_content":"This is a simple document test for os3","doc_cpe_doc_content_name":"os3_content","doc_cpe_doc_title":"os3_TestDocument","doc_cpe_folder_name":"/os3_TestFolder","doc_cpe_obj_store_name":"os3"}],"vc_cpe_folder":[{"folder_cpe_folder_path":"/os_TestFolder","folder_cpe_obj_store_name":"os"},{"folder_cpe_folder_path":"/os2_TestFolder","folder_cpe_obj_store_name":"os2"},{"folder_cpe_folder_path":"/os3_TestFolder","folder_cpe_obj_store_name":"os3"}],"vc_cpe_workflow":[{"workflow_cpe_connection_point":"os_pe_conn_point","workflow_cpe_enabled":true},{"workflow_cpe_connection_point":"os2_pe_conn_point","workflow_cpe_enabled":true},{"workflow_cpe_connection_point":"os3_pe_conn_point","workflow_cpe_enabled":true}]},"vc_icn_verification":[{"vc_icn_desktop_id":"desktop1","vc_icn_repository":"osrepo"},{"vc_icn_desktop_id":"desktop2","vc_icn_repository":"os2repo"},{"vc_icn_desktop_id":"desktop3","vc_icn_repository":"os3repo"}]}}}
-  creationTimestamp: "2026-03-07T11:48:43Z"
-  generation: 1
-  labels:
-    app.kubernetes.io/instance: ibm-fncm
-    app.kubernetes.io/managed-by: ibm-fncm
-    app.kubernetes.io/name: ibm-fncm
-    release: 5.7.0
-  name: fncmdeploy
-  namespace: fncm
-  resourceVersion: "76137906"
-  uid: cb5532ab-ef6b-4073-8fee-ad0ffa28d6a9
-spec:
-  appVersion: 25.0.0
-  content_optional_components:
-    ban: true
-    cmis: false
-    cpe: true
-    css: true
-    es: true
-    graphql: true
-    iccsap: false
-    ier: true
-    tm: true
-  datasource_configuration:
-    dc_gcd_datasource:
-      database_name: devgcd
-      database_port: "5432"
-      database_servername: postgresql.fncm-postgresql.svc.cluster.local
-      dc_common_gcd_datasource_name: FNGCDDS
-      dc_common_gcd_xa_datasource_name: FNGCDDSXA
-      dc_database_type: postgresql
-      dc_hadr_validation_timeout: 15
-    dc_icn_datasource:
-      database_name: devicn
-      database_port: "5432"
-      database_servername: postgresql.fncm-postgresql.svc.cluster.local
-      dc_common_icn_datasource_name: ECMClientDS
-      dc_database_type: postgresql
-      dc_hadr_validation_timeout: 15
-    dc_os_datasources:
-    - database_name: devos1
-      database_port: "5432"
-      database_servername: postgresql.fncm-postgresql.svc.cluster.local
-      dc_common_os_datasource_name: FNOS1DS
-      dc_common_os_xa_datasource_name: FNOS1DSXA
-      dc_database_type: postgresql
-      dc_hadr_validation_timeout: 15
-      dc_os_label: os
-    - database_name: devos2
-      database_port: "5432"
-      database_servername: postgresql.fncm-postgresql.svc.cluster.local
-      dc_common_os_datasource_name: FNOS2DS
-      dc_common_os_xa_datasource_name: FNOS2DSXA
-      dc_database_type: postgresql
-      dc_hadr_validation_timeout: 15
-      dc_os_label: os2
-    - database_name: devos3
-      database_port: "5432"
-      database_servername: postgresql.fncm-postgresql.svc.cluster.local
-      dc_common_os_datasource_name: FNOS3DS
-      dc_common_os_xa_datasource_name: FNOS3DSXA
-      dc_database_type: postgresql
-      dc_hadr_validation_timeout: 15
-      dc_os_label: os3
-    dc_ssl_enabled: false
-  initialize_configuration:
-    ic_ldap_creation:
-      ic_ldap_admin_user_name:
-      - cpadmin
-      ic_ldap_admins_groups_name:
-      - cpadmins
-    ic_obj_store_creation:
-      object_stores:
-      - oc_cpe_obj_store_admin_user_groups:
-        - cpadmin
-        - cpadmins
-        oc_cpe_obj_store_conn:
-          dc_os_datasource_name: FNOS1DS
-          dc_os_xa_datasource_name: FNOS1DSXA
-          name: os_dbconnection
-        oc_cpe_obj_store_display_name: os
-        oc_cpe_obj_store_enable_workflow: true
-        oc_cpe_obj_store_symb_name: os
-        oc_cpe_obj_store_workflow_admin_group: cpadmin
-        oc_cpe_obj_store_workflow_config_group: cpadmin
-        oc_cpe_obj_store_workflow_data_tbl_space: devos1_tbs
-        oc_cpe_obj_store_workflow_date_time_mask: mm/dd/yy hh:tt am
-        oc_cpe_obj_store_workflow_index_tbl_space: devos1indexts
-        oc_cpe_obj_store_workflow_locale: en
-        oc_cpe_obj_store_workflow_pe_conn_point_name: os_pe_conn_point
-        oc_cpe_obj_store_workflow_region_name: os_region
-        oc_cpe_obj_store_workflow_region_number: 1
-      - oc_cpe_obj_store_admin_user_groups:
-        - cpadmin
-        - cpadmins
-        oc_cpe_obj_store_conn:
-          dc_os_datasource_name: FNOS2DS
-          dc_os_xa_datasource_name: FNOS2DSXA
-          name: os2_dbconnection
-        oc_cpe_obj_store_display_name: os2
-        oc_cpe_obj_store_enable_workflow: true
-        oc_cpe_obj_store_symb_name: os2
-        oc_cpe_obj_store_workflow_admin_group: cpadmin
-        oc_cpe_obj_store_workflow_config_group: cpadmin
-        oc_cpe_obj_store_workflow_data_tbl_space: devos2_tbs
-        oc_cpe_obj_store_workflow_date_time_mask: mm/dd/yy hh:tt am
-        oc_cpe_obj_store_workflow_index_tbl_space: devos2indexts
-        oc_cpe_obj_store_workflow_locale: en
-        oc_cpe_obj_store_workflow_pe_conn_point_name: os2_pe_conn_point
-        oc_cpe_obj_store_workflow_region_name: os2_region
-        oc_cpe_obj_store_workflow_region_number: 1
-      - oc_cpe_obj_store_admin_user_groups:
-        - cpadmin
-        - cpadmins
-        oc_cpe_obj_store_conn:
-          dc_os_datasource_name: FNOS3DS
-          dc_os_xa_datasource_name: FNOS3DSXA
-          name: os3_dbconnection
-        oc_cpe_obj_store_display_name: os3
-        oc_cpe_obj_store_enable_workflow: true
-        oc_cpe_obj_store_symb_name: os3
-        oc_cpe_obj_store_workflow_admin_group: cpadmin
-        oc_cpe_obj_store_workflow_config_group: cpadmin
-        oc_cpe_obj_store_workflow_data_tbl_space: devos3_tbs
-        oc_cpe_obj_store_workflow_date_time_mask: mm/dd/yy hh:tt am
-        oc_cpe_obj_store_workflow_index_tbl_space: devos3indexts
-        oc_cpe_obj_store_workflow_locale: en
-        oc_cpe_obj_store_workflow_pe_conn_point_name: os3_pe_conn_point
-        oc_cpe_obj_store_workflow_region_name: os3_region
-        oc_cpe_obj_store_workflow_region_number: 1
-  ldap_configuration:
-    custom:
-      lc_group_filter: (&(cn=%v)(|(objectclass=groupofnames)(objectclass=groupofuniquenames)))
-      lc_user_filter: (&(uid=%v)(objectclass=inetOrgPerson))
-    lc_bind_secret: ldap-bind-secret
-    lc_ldap_base_dn: dc=cp,dc=internal
-    lc_ldap_group_base_dn: ou=Groups,dc=cp,dc=internal
-    lc_ldap_group_display_name_attr: cn
-    lc_ldap_group_member_id_map: groupofnames:member
-    lc_ldap_group_membership_search_filter: (|(&(objectclass=groupofnames)(member=%v))(&(objectclass=groupofuniquenames)(uniquemember=%v)))
-    lc_ldap_group_name_attribute: '*:cn'
-    lc_ldap_port: "389"
-    lc_ldap_precheck: true
-    lc_ldap_server: openldap.fncm-openldap.svc.cluster.local
-    lc_ldap_ssl_enabled: false
-    lc_ldap_user_display_name_attr: uid
-    lc_ldap_user_name_attribute: '*:cn'
-    lc_selected_ldap_type: Custom
-    tds:
-      lc_group_filter: (&(cn=%v)(|(objectclass=groupofnames)(objectclass=groupofuniquenames)))
-      lc_user_filter: (&(uid=%v)(objectclass=inetOrgPerson))
-  license:
-    accept: true
-  navigator_configuration:
-    icn_production_setting:
-      icn_schema: devicn
-      icn_table_space: devicn_tbs
-  shared_configuration:
-    enable_fips: false
-    image_pull_secrets:
-    - ibm-entitlement-key
-    root_ca_secret: fncm-root-ca
-    sc_content_initialization: true
-    sc_content_verification: true
-    sc_deployment_context: FNCM
-    sc_deployment_patterns: content
-    sc_deployment_platform: OCP
-    sc_deployment_profile_size: small
-    sc_deployment_type: production
-    sc_fncm_license_model: FNCM.PVUNonProd
-    sc_generate_sample_network_policies: false
-    sc_image_repository: cp.icr.io
-    storage_configuration:
-      sc_fast_file_storage_classname: nfs-homelab
-      sc_medium_file_storage_classname: nfs-homelab
-      sc_slow_file_storage_classname: nfs-homelab
-    trusted_certificate_list: []
-  verify_configuration:
-    vc_cpe_verification:
-      vc_cpe_cbr:
-      - cbr_cpe_class_name: Document
-        cbr_cpe_obj_store_name: os
-        cbr_cpe_search_string: is a simple
-      - cbr_cpe_class_name: Document
-        cbr_cpe_obj_store_name: os2
-        cbr_cpe_search_string: is a simple
-      - cbr_cpe_class_name: Document
-        cbr_cpe_obj_store_name: os3
-        cbr_cpe_search_string: is a simple
-      vc_cpe_document:
-      - doc_cpe_class_name: Document
-        doc_cpe_doc_content: This is a simple document test for os
-        doc_cpe_doc_content_name: os_content
-        doc_cpe_doc_title: os_TestDocument
-        doc_cpe_folder_name: /os_TestFolder
-        doc_cpe_obj_store_name: os
-      - doc_cpe_class_name: Document
-        doc_cpe_doc_content: This is a simple document test for os2
-        doc_cpe_doc_content_name: os2_content
-        doc_cpe_doc_title: os2_TestDocument
-        doc_cpe_folder_name: /os2_TestFolder
-        doc_cpe_obj_store_name: os2
-      - doc_cpe_class_name: Document
-        doc_cpe_doc_content: This is a simple document test for os3
-        doc_cpe_doc_content_name: os3_content
-        doc_cpe_doc_title: os3_TestDocument
-        doc_cpe_folder_name: /os3_TestFolder
-        doc_cpe_obj_store_name: os3
-      vc_cpe_folder:
-      - folder_cpe_folder_path: /os_TestFolder
-        folder_cpe_obj_store_name: os
-      - folder_cpe_folder_path: /os2_TestFolder
-        folder_cpe_obj_store_name: os2
-      - folder_cpe_folder_path: /os3_TestFolder
-        folder_cpe_obj_store_name: os3
-      vc_cpe_workflow:
-      - workflow_cpe_connection_point: os_pe_conn_point
-        workflow_cpe_enabled: true
-      - workflow_cpe_connection_point: os2_pe_conn_point
-        workflow_cpe_enabled: true
-      - workflow_cpe_connection_point: os3_pe_conn_point
-        workflow_cpe_enabled: true
-    vc_icn_verification:
-    - vc_icn_desktop_id: desktop1
-      vc_icn_repository: osrepo
-    - vc_icn_desktop_id: desktop2
-      vc_icn_repository: os2repo
-    - vc_icn_desktop_id: desktop3
-      vc_icn_repository: os3repo
+{
+  "apiVersion": "fncm.ibm.com/v1",
+  "kind": "FNCMCluster",
+  "metadata": {
+    "labels": {
+      "app.kubernetes.io/instance": "ibm-fncm",
+      "app.kubernetes.io/managed-by": "ibm-fncm",
+      "app.kubernetes.io/name": "ibm-fncm",
+      "release": "5.7.0"
+    },
+    "name": "fncmdeploy",
+    "namespace": "fncm"
+  },
+  "spec": {
+    "appVersion": "25.0.0",
+    "content_optional_components": {
+      "ban": true,
+      "cmis": false,
+      "cpe": true,
+      "css": false,
+      "es": false,
+      "graphql": true,
+      "iccsap": false,
+      "ier": true,
+      "tm": true
+    },
+    "datasource_configuration": {
+      "dc_gcd_datasource": {
+        "database_name": "devgcd",
+        "database_port": "5432",
+        "database_servername": "postgresql.fncm-postgresql.svc.cluster.local",
+        "dc_common_gcd_datasource_name": "FNGCDDS",
+        "dc_common_gcd_xa_datasource_name": "FNGCDDSXA",
+        "dc_database_type": "postgresql",
+        "dc_hadr_validation_timeout": 15
+      },
+      "dc_icn_datasource": {
+        "database_name": "devicn",
+        "database_port": "5432",
+        "database_servername": "postgresql.fncm-postgresql.svc.cluster.local",
+        "dc_common_icn_datasource_name": "ECMClientDS",
+        "dc_database_type": "postgresql",
+        "dc_hadr_validation_timeout": 15
+      },
+      "dc_os_datasources": [
+        {
+          "database_name": "devos1",
+          "database_port": "5432",
+          "database_servername": "postgresql.fncm-postgresql.svc.cluster.local",
+          "dc_common_os_datasource_name": "FNOS1DS",
+          "dc_common_os_xa_datasource_name": "FNOS1DSXA",
+          "dc_database_type": "postgresql",
+          "dc_hadr_validation_timeout": 15,
+          "dc_os_label": "os"
+        },
+        {
+          "database_name": "devos2",
+          "database_port": "5432",
+          "database_servername": "postgresql.fncm-postgresql.svc.cluster.local",
+          "dc_common_os_datasource_name": "FNOS2DS",
+          "dc_common_os_xa_datasource_name": "FNOS2DSXA",
+          "dc_database_type": "postgresql",
+          "dc_hadr_validation_timeout": 15,
+          "dc_os_label": "os2"
+        },
+        {
+          "database_name": "devos3",
+          "database_port": "5432",
+          "database_servername": "postgresql.fncm-postgresql.svc.cluster.local",
+          "dc_common_os_datasource_name": "FNOS3DS",
+          "dc_common_os_xa_datasource_name": "FNOS3DSXA",
+          "dc_database_type": "postgresql",
+          "dc_hadr_validation_timeout": 15,
+          "dc_os_label": "os3"
+        }
+      ],
+      "dc_ssl_enabled": false
+    },
+    "initialize_configuration": {
+      "ic_ldap_creation": {
+        "ic_ldap_admin_user_name": [
+          "cpadmin"
+        ],
+        "ic_ldap_admins_groups_name": [
+          "cpadmins"
+        ]
+      },
+      "ic_obj_store_creation": {
+        "object_stores": [
+          {
+            "oc_cpe_obj_store_admin_user_groups": [
+              "cpadmin",
+              "cpadmins"
+            ],
+            "oc_cpe_obj_store_conn": {
+              "dc_os_datasource_name": "FNOS1DS",
+              "dc_os_xa_datasource_name": "FNOS1DSXA",
+              "name": "os_dbconnection"
+            },
+            "oc_cpe_obj_store_display_name": "os",
+            "oc_cpe_obj_store_enable_workflow": true,
+            "oc_cpe_obj_store_symb_name": "os",
+            "oc_cpe_obj_store_workflow_admin_group": "cpadmin",
+            "oc_cpe_obj_store_workflow_config_group": "cpadmin",
+            "oc_cpe_obj_store_workflow_data_tbl_space": "devos1_tbs",
+            "oc_cpe_obj_store_workflow_date_time_mask": "mm/dd/yy hh:tt am",
+            "oc_cpe_obj_store_workflow_index_tbl_space": "devos1indexts",
+            "oc_cpe_obj_store_workflow_locale": "en",
+            "oc_cpe_obj_store_workflow_pe_conn_point_name": "os_pe_conn_point",
+            "oc_cpe_obj_store_workflow_region_name": "os_region",
+            "oc_cpe_obj_store_workflow_region_number": 1
+          },
+          {
+            "oc_cpe_obj_store_admin_user_groups": [
+              "cpadmin",
+              "cpadmins"
+            ],
+            "oc_cpe_obj_store_conn": {
+              "dc_os_datasource_name": "FNOS2DS",
+              "dc_os_xa_datasource_name": "FNOS2DSXA",
+              "name": "os2_dbconnection"
+            },
+            "oc_cpe_obj_store_display_name": "os2",
+            "oc_cpe_obj_store_enable_workflow": true,
+            "oc_cpe_obj_store_symb_name": "os2",
+            "oc_cpe_obj_store_workflow_admin_group": "cpadmin",
+            "oc_cpe_obj_store_workflow_config_group": "cpadmin",
+            "oc_cpe_obj_store_workflow_data_tbl_space": "devos2_tbs",
+            "oc_cpe_obj_store_workflow_date_time_mask": "mm/dd/yy hh:tt am",
+            "oc_cpe_obj_store_workflow_index_tbl_space": "devos2indexts",
+            "oc_cpe_obj_store_workflow_locale": "en",
+            "oc_cpe_obj_store_workflow_pe_conn_point_name": "os2_pe_conn_point",
+            "oc_cpe_obj_store_workflow_region_name": "os2_region",
+            "oc_cpe_obj_store_workflow_region_number": 1
+          },
+          {
+            "oc_cpe_obj_store_admin_user_groups": [
+              "cpadmin",
+              "cpadmins"
+            ],
+            "oc_cpe_obj_store_conn": {
+              "dc_os_datasource_name": "FNOS3DS",
+              "dc_os_xa_datasource_name": "FNOS3DSXA",
+              "name": "os3_dbconnection"
+            },
+            "oc_cpe_obj_store_display_name": "os3",
+            "oc_cpe_obj_store_enable_workflow": true,
+            "oc_cpe_obj_store_symb_name": "os3",
+            "oc_cpe_obj_store_workflow_admin_group": "cpadmin",
+            "oc_cpe_obj_store_workflow_config_group": "cpadmin",
+            "oc_cpe_obj_store_workflow_data_tbl_space": "devos3_tbs",
+            "oc_cpe_obj_store_workflow_date_time_mask": "mm/dd/yy hh:tt am",
+            "oc_cpe_obj_store_workflow_index_tbl_space": "devos3indexts",
+            "oc_cpe_obj_store_workflow_locale": "en",
+            "oc_cpe_obj_store_workflow_pe_conn_point_name": "os3_pe_conn_point",
+            "oc_cpe_obj_store_workflow_region_name": "os3_region",
+            "oc_cpe_obj_store_workflow_region_number": 1
+          }
+        ]
+      }
+    },
+    "ldap_configuration": {
+      "lc_bind_secret": "ldap-bind-secret",
+      "lc_ldap_base_dn": "dc=cp,dc=internal",
+      "lc_ldap_group_base_dn": "ou=Groups,dc=cp,dc=internal",
+      "lc_ldap_group_display_name_attr": "cn",
+      "lc_ldap_group_member_id_map": "groupofnames:member",
+      "lc_ldap_group_membership_search_filter": "(|(&(objectclass=groupofnames)(member=%v))(&(objectclass=groupofuniquenames)(uniquemember=%v)))",
+      "lc_ldap_group_name_attribute": "*:cn",
+      "lc_ldap_port": "389",
+      "lc_ldap_precheck": true,
+      "lc_ldap_server": "openldap.fncm-openldap.svc.cluster.local",
+      "lc_ldap_ssl_enabled": false,
+      "lc_ldap_user_display_name_attr": "uid",
+      "lc_ldap_user_name_attribute": "*:cn",
+      "lc_selected_ldap_type": "IBM Security Directory Server",
+      "tds": {
+        "lc_group_filter": "(&(cn=%v)(|(objectclass=groupofnames)(objectclass=groupofuniquenames)))",
+        "lc_user_filter": "(&(uid=%v)(objectclass=inetOrgPerson))"
+      }
+    },
+    "license": {
+      "accept": true
+    },
+    "navigator_configuration": {
+      "icn_production_setting": {
+        "icn_schema": "devicn",
+        "icn_table_space": "devicn_tbs"
+      }
+    },
+    "shared_configuration": {
+      "enable_fips": false,
+      "image_pull_secrets": [
+        "ibm-entitlement-key"
+      ],
+      "root_ca_secret": "fncm-root-ca",
+      "sc_content_initialization": true,
+      "sc_content_verification": true,
+      "sc_deployment_context": "FNCM",
+      "sc_deployment_patterns": "content",
+      "sc_deployment_platform": "OCP",
+      "sc_deployment_profile_size": "small",
+      "sc_deployment_type": "production",
+      "sc_fncm_license_model": "FNCM.PVUNonProd",
+      "sc_generate_sample_network_policies": false,
+      "sc_image_repository": "cp.icr.io",
+      "sc_run_as_user": null,
+      "storage_configuration": {
+        "sc_fast_file_storage_classname": "nfs-homelab",
+        "sc_medium_file_storage_classname": "nfs-homelab",
+        "sc_slow_file_storage_classname": "nfs-homelab"
+      },
+      "trusted_certificate_list": []
+    },
+    "verify_configuration": {
+      "vc_cpe_verification": {
+        "vc_cpe_cbr": [
+          {
+            "cbr_cpe_class_name": "Document",
+            "cbr_cpe_obj_store_name": "os",
+            "cbr_cpe_search_string": "is a simple"
+          },
+          {
+            "cbr_cpe_class_name": "Document",
+            "cbr_cpe_obj_store_name": "os2",
+            "cbr_cpe_search_string": "is a simple"
+          },
+          {
+            "cbr_cpe_class_name": "Document",
+            "cbr_cpe_obj_store_name": "os3",
+            "cbr_cpe_search_string": "is a simple"
+          }
+        ],
+        "vc_cpe_document": [
+          {
+            "doc_cpe_class_name": "Document",
+            "doc_cpe_doc_content": "This is a simple document test for os",
+            "doc_cpe_doc_content_name": "os_content",
+            "doc_cpe_doc_title": "os_TestDocument",
+            "doc_cpe_folder_name": "/os_TestFolder",
+            "doc_cpe_obj_store_name": "os"
+          },
+          {
+            "doc_cpe_class_name": "Document",
+            "doc_cpe_doc_content": "This is a simple document test for os2",
+            "doc_cpe_doc_content_name": "os2_content",
+            "doc_cpe_doc_title": "os2_TestDocument",
+            "doc_cpe_folder_name": "/os2_TestFolder",
+            "doc_cpe_obj_store_name": "os2"
+          },
+          {
+            "doc_cpe_class_name": "Document",
+            "doc_cpe_doc_content": "This is a simple document test for os3",
+            "doc_cpe_doc_content_name": "os3_content",
+            "doc_cpe_doc_title": "os3_TestDocument",
+            "doc_cpe_folder_name": "/os3_TestFolder",
+            "doc_cpe_obj_store_name": "os3"
+          }
+        ],
+        "vc_cpe_folder": [
+          {
+            "folder_cpe_folder_path": "/os_TestFolder",
+            "folder_cpe_obj_store_name": "os"
+          },
+          {
+            "folder_cpe_folder_path": "/os2_TestFolder",
+            "folder_cpe_obj_store_name": "os2"
+          },
+          {
+            "folder_cpe_folder_path": "/os3_TestFolder",
+            "folder_cpe_obj_store_name": "os3"
+          }
+        ],
+        "vc_cpe_workflow": [
+          {
+            "workflow_cpe_connection_point": "os_pe_conn_point",
+            "workflow_cpe_enabled": true
+          },
+          {
+            "workflow_cpe_connection_point": "os2_pe_conn_point",
+            "workflow_cpe_enabled": true
+          },
+          {
+            "workflow_cpe_connection_point": "os3_pe_conn_point",
+            "workflow_cpe_enabled": true
+          }
+        ]
+      },
+      "vc_icn_verification": [
+        {
+          "vc_icn_desktop_id": "desktop1",
+          "vc_icn_repository": "osrepo"
+        },
+        {
+          "vc_icn_desktop_id": "desktop2",
+          "vc_icn_repository": "os2repo"
+        },
+        {
+          "vc_icn_desktop_id": "desktop3",
+          "vc_icn_repository": "os3repo"
+        }
+      ]
+    }
+  }
+}
