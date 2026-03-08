@@ -169,7 +169,8 @@
           - group: fncm.ibm.com
             kind: FNCMCluster
             managedFieldsManagers:
-              - OpenAPI-Generator
+              - OpenAPI-Generator   # FNCM operator — reconciles CR on every cycle
+              - fncm-ansible        # Our SSA field manager (fncm_deploy role)
             jsonPointers:
               - /metadata/annotations
               - /metadata/generation
@@ -191,74 +192,33 @@
       - "  Prune      : {{ argocd_prune }}"
   when: argocd_gitops_repo_url | length > 0
 
-# ── 8e: Confirm operator stopped, strip annotation + clear managedFields ───────
-# The install playbook creates the FNCMCluster CR via kubernetes.core.k8s which
-# uses server-side apply (kubectl manager).  If the resource was previously applied
-# with kubectl apply (client-side), the kubectl-client-side-apply annotation causes
-# ArgoCD's SSA migration to fail with a 409 conflict.  We strip both the annotation
-# and managedFields so ArgoCD starts with a clean server-side apply slate.
+# ── 8e: Strip legacy CSA annotation (safety net for old installations) ────────
+# Since fncm_deploy now uses --server-side apply (field-manager=fncm-ansible),
+# the kubectl-client-side-apply manager is never created and ArgoCD's CSA→SSA
+# migration never triggers — permanently eliminating the 409 conflict.
 #
-# Root cause of 409 conflict: the FNCM operator is paused (replicas=0) by
-# fncm_deploy, but may still be mid-reconcile when we patch managedFields.
-# Fix: wait until the operator pod is fully gone before touching the CR.
+# This step is kept as a safety net only: if the FNCMCluster CR was previously
+# applied with client-side apply (e.g. by an older version of this automation),
+# the annotation is stripped here so ArgoCD doesn't attempt the migration.
+# failed_when: false so it is a no-op on clean installations.
 
-- name: "ArgoCD [8e] | Wait for FNCM operator pod to fully stop (avoids 409 on managedFields patch)"
+- name: "ArgoCD [8e] | Strip legacy kubectl-client-side-apply annotation (safety net)"
   ansible.builtin.shell: >
-    oc get pods -n {{ fncm_namespace }} -l name=ibm-fncm-operator
-    --no-headers 2>/dev/null | grep -v Terminating | wc -l | tr -d ' '
-  register: operator_pod_count
-  retries: 20
-  delay: 10
-  until: operator_pod_count.stdout == "0"
-  changed_when: false
-  failed_when: false
-
-- name: "ArgoCD [8e] | Strip kubectl-client-side-apply annotation (with retry on 409)"
-  ansible.builtin.shell: |
-    for i in 1 2 3 4 5; do
-      out=$(oc annotate fncmclusters.fncm.ibm.com fncmdeploy \
-        kubectl.kubernetes.io/last-applied-configuration- \
-        -n {{ fncm_namespace }} 2>&1)
-      rc=$?
-      echo "$out"
-      [ $rc -eq 0 ] && break
-      echo "Attempt $i failed (rc=$rc), retrying in 5s..."
-      sleep 5
-    done
-    exit 0
+    oc annotate fncmclusters.fncm.ibm.com fncmdeploy
+    kubectl.kubernetes.io/last-applied-configuration-
+    -n {{ fncm_namespace }}
   changed_when: false
   failed_when: false
   register: argocd_annotate_result
 
-- name: "ArgoCD [8e] | Clear managedFields from FNCMCluster (with retry on 409 conflict)"
-  ansible.builtin.shell: |
-    for i in 1 2 3 4 5; do
-      out=$(oc patch fncmclusters.fncm.ibm.com fncmdeploy \
-        -n {{ fncm_namespace }} \
-        --type=json \
-        -p '[{"op":"remove","path":"/metadata/managedFields"}]' 2>&1)
-      rc=$?
-      echo "$out"
-      # rc=0 = success; "not found" means already cleared
-      [ $rc -eq 0 ] && break
-      echo "$out" | grep -q "not found" && break
-      echo "Attempt $i failed (rc=$rc), retrying in 5s..."
-      sleep 5
-    done
-    exit 0
-  changed_when: false
-  failed_when: false
-  register: argocd_patch_result
-
-- name: "ArgoCD [8e] | Brief settle pause (let resourceVersion stabilise before Application creation)"
-  ansible.builtin.pause:
-    seconds: 10
-
-- name: "ArgoCD [8e] | managedFields cleanup summary"
+- name: "ArgoCD [8e] | Annotation cleanup result"
   ansible.builtin.debug:
-    msg:
-      - "Annotation removal : {{ argocd_annotate_result.stdout_lines | last | default('done') }}"
-      - "managedFields clear: {{ argocd_patch_result.stdout_lines | last | default('done') }}"
+    msg: >-
+      {{
+        'CSA annotation removed (was present from a previous client-side apply).'
+        if argocd_annotate_result.rc == 0
+        else 'CSA annotation already absent (clean SSA installation).'
+      }}
 
 # ── 8f: Hard-refresh ArgoCD Application ──────────────────────────────────────
 - name: "ArgoCD [8f] | Hard-refresh Application (forces cluster re-read)"

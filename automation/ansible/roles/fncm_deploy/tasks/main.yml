@@ -73,12 +73,22 @@
     oc apply -f . -n {{ fncm_namespace }}"
   changed_when: true
 
-# ── 7c: Apply FNCM Custom Resource ───────────────────────────────────────────
+# ── 7c: Apply FNCM Custom Resource (server-side apply) ───────────────────────
+# Use --server-side so Kubernetes never creates a kubectl-client-side-apply
+# manager entry on the FNCMCluster CR.  Without this, every ArgoCD sync
+# triggers a CSA→SSA migration that races with the FNCM operator writes and
+# fails with "Operation cannot be fulfilled … object has been modified" (409).
+# --force-conflicts lets our field-manager win if the operator already owns
+# overlapping fields; ArgoCD then takes clean ownership via its own SSA sync.
 
-- name: Apply FNCM Custom Resource
+- name: Apply FNCM Custom Resource (server-side apply — prevents ArgoCD CSA migration 409)
   ansible.builtin.shell: >
     oc exec -n {{ install_namespace }} install --
-    bash -c "oc apply -f {{ generated_files_path }}/ibm_fncm_cr_production.yaml
+    bash -c "oc apply
+    --server-side
+    --field-manager=fncm-ansible
+    --force-conflicts
+    -f {{ generated_files_path }}/ibm_fncm_cr_production.yaml
     -n {{ fncm_namespace }}"
   register: cr_apply
   changed_when: true
