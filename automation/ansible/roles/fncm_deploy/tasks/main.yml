@@ -223,10 +223,35 @@
   register: fncm_status
   changed_when: false
 
+- name: Fetch FNCM access info ConfigMap
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: ConfigMap
+    name: fncmdeploy-fncm-access-info
+    namespace: "{{ fncm_namespace }}"
+  register: fncm_access_info_cm
+  changed_when: false
+  failed_when: false
+
+- name: Display FNCM access endpoints
+  ansible.builtin.debug:
+    msg: "{{ item.key }}: {{ item.value }}"
+  loop: "{{ fncm_access_info_cm.resources[0].data | default({}) | dict2items | sort(attribute='key') }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when: fncm_access_info_cm.resources | length > 0
+
+- name: Warn if access info ConfigMap not yet available
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: fncmdeploy-fncm-access-info ConfigMap not found.
+      The operator may still be initialising. Re-run or check:
+        oc get cm fncmdeploy-fncm-access-info -n {{ fncm_namespace }} -o yaml
+  when: fncm_access_info_cm.resources | length == 0
+
 - name: Display FNCM status
   ansible.builtin.debug:
     msg:
       - "FNCM deployment complete!"
       - "Components: {{ fncm_status.stdout }}"
       - "Operator is paused (replicas=0) to lock in GraphQL XSRF fix."
-      - "Access info: oc get cm fncmdeploy-fncm-access-info -n {{ fncm_namespace }} -o yaml"

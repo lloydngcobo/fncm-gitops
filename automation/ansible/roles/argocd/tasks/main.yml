@@ -279,12 +279,22 @@
     - argocd_gitops_repo_url | length > 0
     - _fncm_manifest_clean is defined
 
-# ── 8h: Certificate verification ─────────────────────────────────────────────
+# ── 8h: Certificate verification + cluster-wide trust registration ───────────
 # The FNCM operator automatically creates fncm-root-ca (the ICP4A Root CA).
 # This CA signs all FNCM route TLS certificates.  Browsers will show
-# NET::ERR_CERT_AUTHORITY_INVALID until this CA is trusted on the workstation.
-# In AWX/cluster context we verify the secret exists and surface the PEM.
-# On Windows run: automation\powershell\Add-ClusterCerts.ps1 to import it.
+# NET::ERR_CERT_AUTHORITY_INVALID until this CA is trusted.
+#
+# Cluster-wide trust:
+#   We register the CA in the OpenShift cluster trust bundle via:
+#     1. openshift-config/fncm-ca-bundle ConfigMap  (ca-bundle.crt key)
+#     2. proxy/cluster spec.trustedCA.name          (references the ConfigMap)
+#   The Cluster Network Operator then propagates the merged CA bundle to all
+#   pods that have the 'config.openshift.io/inject-trusted-cabundle: "true"'
+#   annotation, and to the cluster-wide egress/router trust chain.
+#
+# Workstation trust:
+#   Windows: run  automation\powershell\Add-ClusterCerts.ps1 to import into
+#   the OS/browser trust store so Chrome/Edge stop showing TLS warnings.
 
 - name: "ArgoCD [8h] | Verify fncm-root-ca secret exists"
   kubernetes.core.k8s_info:
@@ -317,13 +327,67 @@
     msg:
       - "================================================================"
       - "  FNCM Root CA Certificate (PEM)"
-      - "  Add this to your OS/browser trust store to avoid TLS warnings."
-      - "  Windows: run  automation\\powershell\\Add-ClusterCerts.ps1"
+      - "  Registering in OpenShift cluster trust bundle automatically."
+      - "  Windows workstation: run  automation\\powershell\\Add-ClusterCerts.ps1"
       - "================================================================"
       - "{{ fncm_root_ca_pem }}"
   when:
     - fncm_root_ca_secret.resources | length > 0
     - fncm_root_ca_pem | length > 0
+
+# ── 8h (cluster trust): Register FNCM Root CA in OpenShift trust bundle ──────
+# Creates/updates openshift-config/fncm-ca-bundle ConfigMap with the CA PEM,
+# then patches proxy/cluster spec.trustedCA to reference it.
+# CNO propagates the merged bundle to all pods that opt-in via annotation and
+# to the cluster-wide egress trust chain — no manual cert import needed for
+# cluster-internal traffic.
+#
+# Note: The patch uses merge strategy so an existing trustedCA name is
+# replaced atomically; failed_when: false so a missing proxy/cluster
+# (non-OCP clusters) is a warning, not a fatal error.
+
+- name: "ArgoCD [8h] | Create / update fncm-ca-bundle ConfigMap in openshift-config"
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: fncm-ca-bundle
+        namespace: openshift-config
+        labels:
+          fncm.ibm.com/managed-by: fncm-ansible-automation
+      data:
+        ca-bundle.crt: "{{ fncm_root_ca_pem }}"
+  when:
+    - fncm_root_ca_secret.resources | length > 0
+    - fncm_root_ca_pem | length > 0
+  register: fncm_ca_cm_result
+
+- name: "ArgoCD [8h] | Patch proxy/cluster to reference fncm-ca-bundle (cluster-wide trust)"
+  ansible.builtin.shell: >
+    oc patch proxy/cluster
+    --type=merge
+    -p '{"spec":{"trustedCA":{"name":"fncm-ca-bundle"}}}'
+  when:
+    - fncm_root_ca_secret.resources | length > 0
+    - fncm_root_ca_pem | length > 0
+  changed_when: true
+  failed_when: false
+  register: fncm_proxy_patch_result
+
+- name: "ArgoCD [8h] | Cluster trust registration status"
+  ansible.builtin.debug:
+    msg: >-
+      {{
+        'FNCM Root CA registered in cluster trust bundle (proxy/cluster patched). ' +
+        'CNO will propagate the merged CA bundle to all opted-in pods.'
+        if (fncm_root_ca_secret.resources | length > 0 and fncm_root_ca_pem | length > 0
+            and fncm_proxy_patch_result.rc | default(1) == 0)
+        else 'WARNING: proxy/cluster patch skipped or failed — ' +
+             'cluster-wide CA trust may need manual setup. ' +
+             fncm_proxy_patch_result.stderr | default('(no error detail)')
+      }}
 
 # ── 8i: Summary ───────────────────────────────────────────────────────────────
 - name: "ArgoCD [8i] | Summary"
