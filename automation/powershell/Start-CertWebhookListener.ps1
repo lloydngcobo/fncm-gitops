@@ -1,38 +1,28 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Lightweight HTTP webhook listener that auto-imports FNCM cluster CA
-    certificates into the Windows trust store when an AWX job succeeds.
+    HTTP webhook listener. Runs Add-ClusterCerts.ps1 when AWX job succeeds.
 
 .DESCRIPTION
-    Listens on http://localhost:<Port>/trigger for AWX job-completion webhooks.
-    When AWX sends a POST with status="successful", the listener automatically
-    invokes Add-ClusterCerts.ps1 — fetching the FNCM Root CA and OCP Router CA
-    from the cluster and importing them into Cert:\LocalMachine\Root.
+    Listens on http://localhost:<Port>/
+      POST /trigger  - AWX webhook target; imports certs when status=successful
+      GET  /health   - liveness probe
 
-    Because this listener is registered as a Windows Scheduled Task with
-    "Run with highest privileges" (see Register-CertWebhookTask.ps1), the
-    cert import runs fully elevated — no UAC prompt is shown to the user.
-
-    Endpoints:
-      POST /trigger  — AWX webhook target; triggers cert import on "successful"
-      GET  /health   — health probe (returns {"status":"ok"})
+    Registered as a Windows Scheduled Task (elevated) by Register-CertWebhookTask.ps1
+    so cert import happens with no UAC prompt.
+    Log: %TEMP%\fncm-cert-webhook.log
 
 .PARAMETER Port
-    TCP port to listen on.  Default: 8765.
-    Must match the AWX notification URL (http://host.docker.internal:<Port>/trigger).
+    TCP port. Default: 18765.
 
 .EXAMPLE
-    # Start manually (for testing)
     .\Start-CertWebhookListener.ps1
 
-    # Test via PowerShell (from another window)
-    Invoke-RestMethod -Method POST -Uri http://localhost:8765/trigger `
-        -ContentType 'application/json' `
-        -Body '{"status":"successful","name":"FNCM Full Install"}'
+    Invoke-RestMethod http://localhost:18765/health
 
-    # Health check
-    Invoke-RestMethod http://localhost:8765/health
+    Invoke-RestMethod -Method POST http://localhost:18765/trigger `
+        -ContentType application/json `
+        -Body '{"status":"successful","name":"test"}'
 #>
 [CmdletBinding()]
 param(
@@ -51,109 +41,93 @@ $LogFile        = Join-Path $env:TEMP 'fncm-cert-webhook.log'
 
 function Write-WebhookLog {
     param([string]$Message, [string]$Level = 'INFO')
-    $ts  = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
-    $line = "[$ts] [$Level] $Message"
-    $line | Out-File -FilePath $LogFile -Append -Encoding UTF8
-    Write-Log $Message $Level   # also emit to console / scheduled task output
+    $ts = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+    Add-Content -Path $LogFile -Value "[$ts] [$Level] $Message" -Encoding UTF8
+    Write-Log $Message $Level
 }
 
+# Validate cert script exists
 if (-not (Test-Path $AddCertsScript)) {
-    Write-WebhookLog "Add-ClusterCerts.ps1 not found at: $AddCertsScript" 'ERROR'
+    Write-WebhookLog "Add-ClusterCerts.ps1 not found: $AddCertsScript" 'ERROR'
     exit 1
 }
 
-# ── Check for another instance already listening ──────────────────────────────
-$testConn = Test-NetConnection -ComputerName 127.0.0.1 -Port $Port -WarningAction SilentlyContinue -InformationLevel Quiet 2>$null
-if ($testConn) {
-    Write-WebhookLog "Port $Port is already in use — another listener may be running. Exiting." 'WARN'
+# Port-in-use check (TcpClient is more reliable than Test-NetConnection)
+$portInUse = $false
+$tcpCheck = New-Object System.Net.Sockets.TcpClient
+try {
+    $tcpCheck.Connect('127.0.0.1', $Port)
+    $portInUse = $true
+    $tcpCheck.Close()
+} catch {
+    $portInUse = $false
+}
+
+if ($portInUse) {
+    Write-WebhookLog "Port $Port already in use - another listener may be running. Exiting." 'WARN'
     exit 0
 }
 
 Write-WebhookLog "FNCM Cert Webhook Listener starting on $ListenUrl" 'INFO'
-Write-WebhookLog "Waiting for AWX job completion notification..." 'INFO'
-Write-WebhookLog "Log file: $LogFile" 'INFO'
-Write-WebhookLog "" 'INFO'
+Write-WebhookLog "Log: $LogFile" 'INFO'
 
-$listener = [System.Net.HttpListener]::new()
+$listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add($ListenUrl)
+$listener.Start()
+Write-WebhookLog "Ready. AWX webhook URL: http://host.docker.internal:${Port}/trigger" 'SUCCESS'
 
 try {
-    $listener.Start()
-    Write-WebhookLog "Listener active. AWX notification URL: http://host.docker.internal:${Port}/trigger" 'SUCCESS'
+    while ($true) {
 
-    while ($listener.IsListening) {
+        $ctx      = $listener.GetContext()
+        $req      = $ctx.Request
+        $res      = $ctx.Response
+        $path     = $req.Url.AbsolutePath
+        $method   = $req.HttpMethod
+        Write-WebhookLog "$method $path" 'INFO'
 
-        $context  = $listener.GetContext()   # blocking — waits for next HTTP request
-        $request  = $context.Request
-        $response = $context.Response
+        $respCode = 200
+        $respBody = '{}'
 
-        try {
-            $path   = $request.Url.AbsolutePath
-            $method = $request.HttpMethod
-            Write-WebhookLog "Received: $method $path" 'INFO'
+        if ($method -eq 'POST' -and $path -eq '/trigger') {
 
-            if ($path -eq '/trigger' -and $method -eq 'POST') {
+            $body = (New-Object System.IO.StreamReader($req.InputStream)).ReadToEnd()
+            Write-WebhookLog "Body: $body" 'INFO'
 
-                # ── Read and parse JSON body ──────────────────────────────────
-                $body = (New-Object System.IO.StreamReader $request.InputStream).ReadToEnd()
-                Write-WebhookLog "Payload: $body" 'INFO'
+            $pl = $null
+            try   { $pl = $body | ConvertFrom-Json }
+            catch { Write-WebhookLog "JSON parse failed - treating as unknown status." 'WARN' }
 
-                $payload = $null
-                try { $payload = $body | ConvertFrom-Json } catch { }
+            $jobStatus = 'unknown'
+            $jobName   = '(unknown)'
+            if ($pl -ne $null -and $pl.PSObject.Properties['status']) { $jobStatus = $pl.status }
+            if ($pl -ne $null -and $pl.PSObject.Properties['name'])   { $jobName   = $pl.name   }
 
-                $jobStatus   = if ($payload -and $payload.status)   { $payload.status }   else { 'unknown' }
-                $jobName     = if ($payload -and $payload.name)     { $payload.name }     else { '(unknown job)' }
-
-                if ($jobStatus -eq 'successful') {
-                    Write-WebhookLog "AWX job '$jobName' succeeded — triggering cert import..." 'SUCCESS'
-
-                    # ── Run Add-ClusterCerts.ps1 ──────────────────────────────
-                    # Since this listener runs elevated (highest privileges via
-                    # scheduled task), Add-ClusterCerts.ps1 also runs elevated
-                    # and imports directly into Cert:\LocalMachine\Root without UAC.
-                    $proc = Start-Process -FilePath 'powershell.exe' `
-                        -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass',
-                                      '-File', "`"$AddCertsScript`"" `
-                        -WindowStyle Normal `
-                        -PassThru
-
-                    Write-WebhookLog "Add-ClusterCerts.ps1 started (PID $($proc.Id))." 'SUCCESS'
-
-                    $responseBody = '{"result":"cert_import_triggered"}'
-                    $responseCode = 200
-
-                } else {
-                    Write-WebhookLog "AWX job '$jobName' status: $jobStatus — cert import skipped." 'WARN'
-                    $responseBody = "{`"result`":`"skipped`",`"status`":`"$jobStatus`"}"
-                    $responseCode = 200
-                }
-
-            } elseif ($path -eq '/health' -and $method -eq 'GET') {
-                $responseBody = '{"status":"ok","listener":"fncm-cert-webhook"}'
-                $responseCode = 200
-
+            if ($jobStatus -eq 'successful') {
+                Write-WebhookLog "AWX job '$jobName' succeeded - triggering Add-ClusterCerts.ps1..." 'SUCCESS'
+                $psArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$AddCertsScript`""
+                Start-Process -FilePath powershell.exe -ArgumentList $psArgs -WindowStyle Normal
+                $respBody = '{"result":"cert_import_triggered"}'
             } else {
-                $responseBody = '{"error":"not_found"}'
-                $responseCode = 404
+                Write-WebhookLog "Job '$jobName' status=$jobStatus - cert import skipped." 'WARN'
+                $respBody = '{"result":"skipped"}'
             }
 
-        } catch {
-            Write-WebhookLog "Error handling request: $_" 'ERROR'
-            $responseBody = '{"error":"internal_error"}'
-            $responseCode = 500
+        } elseif ($path -eq '/health') {
+            $respBody = '{"status":"ok","listener":"fncm-cert-webhook"}'
+        } else {
+            $respCode = 404
+            $respBody = '{"error":"not_found"}'
         }
 
-        # ── Send HTTP response ────────────────────────────────────────────────
-        $response.StatusCode      = $responseCode
-        $response.ContentType     = 'application/json'
-        $bytes = [System.Text.Encoding]::UTF8.GetBytes($responseBody)
-        $response.ContentLength64 = $bytes.Length
-        $response.OutputStream.Write($bytes, 0, $bytes.Length)
-        $response.Close()
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($respBody)
+        $res.StatusCode      = $respCode
+        $res.ContentType     = 'application/json'
+        $res.ContentLength64 = $bytes.Length
+        $res.OutputStream.Write($bytes, 0, $bytes.Length)
+        $res.Close()
     }
 
-} catch {
-    Write-WebhookLog "Listener fatal error: $_" 'ERROR'
 } finally {
     $listener.Stop()
     Write-WebhookLog "Listener stopped." 'INFO'
