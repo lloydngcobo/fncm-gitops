@@ -256,6 +256,8 @@
               default: "FNCM.PVUNonProd"
         extra_vars:
           ocp_api_url: "{{ ocp_api_url }}"
+        notification_templates_success:
+          - "FNCM Cert Import"     # triggers Add-ClusterCerts.ps1 on workstation
         state: present
         controller_host: "{{ awx_url }}"
         controller_username: "{{ awx_username }}"
@@ -349,6 +351,35 @@
         controller_password: "{{ awx_password }}"
         validate_certs: false
 
+    # ── Cert Webhook Notification ─────────────────────────────────────────────
+    # AWX sends a POST to http://host.docker.internal:8765/trigger when the
+    # "FNCM Full Install" job completes successfully.  The Windows listener
+    # (Start-CertWebhookListener.ps1) receives this and runs Add-ClusterCerts.ps1,
+    # which imports the FNCM Root CA and OCP Router CA into Cert:\LocalMachine\Root.
+    #
+    # One-time Windows setup (run on the admin workstation):
+    #   automation\powershell\Register-CertWebhookTask.ps1
+    #   Start-ScheduledTask -TaskName 'FNCM Cert Webhook Listener'
+
+    - name: "AWX | Create webhook notification: FNCM Cert Import"
+      awx.awx.notification_template:
+        name: "FNCM Cert Import"
+        description: >
+          Triggers Add-ClusterCerts.ps1 on the admin workstation when FNCM
+          Full Install succeeds.  Requires Register-CertWebhookTask.ps1 to
+          have been run once on the workstation.
+        organization: "{{ awx_org_name }}"
+        notification_type: webhook
+        notification_configuration:
+          url: "http://host.docker.internal:8765/trigger"
+          http_method: POST
+          headers: {}
+        state: present
+        controller_host: "{{ awx_url }}"
+        controller_username: "{{ awx_username }}"
+        controller_password: "{{ awx_password }}"
+        validate_certs: false
+
     # ── Workflow ───────────────────────────────────────────────────────────────
     - name: "AWX | Create workflow: FNCM Full Deploy"
       awx.awx.workflow_job_template:
@@ -412,7 +443,14 @@
           - "  Workflow:"
           - "    - FNCM Full Deploy (Install → Approval → ArgoCD)"
           - ""
+          - "  Notification:"
+          - "    - FNCM Cert Import (webhook → http://host.docker.internal:8765/trigger)"
+          - ""
           - "  Next steps:"
           - "    1. Build custom EE: ansible-builder build -t {{ fncm_ee_image }}"
-          - "    2. Open {{ awx_url }} → Templates → FNCM Full Install"
-          - "    3. Click Launch → fill survey → monitor job"
+          - "    2. Register cert webhook on your workstation (run ONCE):"
+          - "         automation\\powershell\\Register-CertWebhookTask.ps1"
+          - "         Start-ScheduledTask -TaskName 'FNCM Cert Webhook Listener'"
+          - "    3. Open {{ awx_url }} → Templates → FNCM Full Install"
+          - "    4. Click Launch → fill survey → monitor job"
+          - "       (certs auto-imported into Windows trust store on success)"
