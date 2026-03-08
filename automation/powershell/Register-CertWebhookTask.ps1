@@ -41,7 +41,7 @@
 [CmdletBinding(SupportsShouldProcess)]
 param(
     [switch]$Unregister,
-    [int]$Port = 8765
+    [int]$Port = 18765
 )
 
 Set-StrictMode -Version Latest

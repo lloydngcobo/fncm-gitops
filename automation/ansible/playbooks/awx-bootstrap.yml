@@ -352,7 +352,7 @@
         validate_certs: false
 
     # ── Cert Webhook Notification ─────────────────────────────────────────────
-    # AWX sends a POST to http://host.docker.internal:8765/trigger when the
+    # AWX sends a POST to http://host.docker.internal:18765/trigger when the
     # "FNCM Full Install" job completes successfully.  The Windows listener
     # (Start-CertWebhookListener.ps1) receives this and runs Add-ClusterCerts.ps1,
     # which imports the FNCM Root CA and OCP Router CA into Cert:\LocalMachine\Root.
@@ -371,7 +371,7 @@
         organization: "{{ awx_org_name }}"
         notification_type: webhook
         notification_configuration:
-          url: "http://host.docker.internal:8765/trigger"
+          url: "http://host.docker.internal:18765/trigger"
           http_method: POST
           headers: {}
         state: present
@@ -444,7 +444,7 @@
           - "    - FNCM Full Deploy (Install → Approval → ArgoCD)"
           - ""
           - "  Notification:"
-          - "    - FNCM Cert Import (webhook → http://host.docker.internal:8765/trigger)"
+          - "    - FNCM Cert Import (webhook → http://host.docker.internal:18765/trigger)"
           - ""
           - "  Next steps:"
           - "    1. Build custom EE: ansible-builder build -t {{ fncm_ee_image }}"
