@@ -29,7 +29,7 @@
       ICCSAP = {{ deploy_iccsap | lower }}
       DATABASE_TYPE = 4
       DATABASE_SSL_ENABLE = false
-      DATABASE_OBJECT_STORE_COUNT = {{ 3 if deploy_ier else 1 }}
+      DATABASE_OBJECT_STORE_COUNT = {{ 3 if deploy_ier | bool else 1 }}
       SENDMAIL_SUPPORT = false
       ICC_SUPPORT = false
       TM_CUSTOM_GROUP_SUPPORT = false
