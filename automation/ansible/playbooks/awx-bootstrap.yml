@@ -254,6 +254,18 @@
               choices: "FNCM.PVUNonProd\nFNCM.PVUProd\nFNCM.UVU\nFNCM.CU"
               required: true
               default: "FNCM.PVUNonProd"
+            - question_name: "Deploy IER (IBM Enterprise Records)?"
+              variable: deploy_ier
+              type: multiplechoice
+              choices: "false\ntrue"
+              required: true
+              default: "false"
+            - question_name: "Deploy Task Manager (TM)?"
+              variable: deploy_tm
+              type: multiplechoice
+              choices: "false\ntrue"
+              required: true
+              default: "false"
         extra_vars:
           ocp_api_url: "{{ ocp_api_url }}"
         notification_templates_success:
