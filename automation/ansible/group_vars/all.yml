@@ -75,9 +75,9 @@ fncm_license: "FNCM.PVUNonProd"
 deploy_cpe:    true
 deploy_graphql: true
 deploy_ban:    true
-deploy_css:    false
-deploy_cmis:   false
-deploy_tm:     false
+deploy_css:    true
+deploy_cmis:   true
+deploy_tm:     true
 deploy_es:     false
 deploy_ier:    false
 deploy_iccsap: false
@@ -93,6 +93,12 @@ fncm_repo_url: "https://github.com/ibm-ecm/ibm-fncm-containers.git"
 
 # --- Network ---
 network_cidr: "10.2.1.0/0"
+
+# --- JDBC Drivers ---
+# PostgreSQL JDBC JAR is downloaded into operator-shared-pvc during operator deployment.
+# In FNCM 5.7.0 the JAR was removed from the install package; this step restores it.
+jdbc_postgres_jar: "postgresql-42.7.11.jar"
+jdbc_postgres_url: "https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.11/postgresql-42.7.11.jar"
 
 # --- Images ---
 ubi_image:        "ubi9/ubi:9.3"
