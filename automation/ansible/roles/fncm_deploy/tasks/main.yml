@@ -159,7 +159,7 @@
 - name: Wait for JDBC copy pod to be Running
   ansible.builtin.shell: >
     oc wait pod/fncm-jdbc-copy -n {{ fncm_namespace }}
-    --for=condition=Ready --timeout=120s
+    --for=condition=Ready --timeout=180s
   changed_when: false
 
 - name: Copy PostgreSQL JDBC JAR into operator-shared-pvc via oc cp
