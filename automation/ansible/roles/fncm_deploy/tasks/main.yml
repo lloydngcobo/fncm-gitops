@@ -97,6 +97,80 @@
   ansible.builtin.debug:
     var: cr_apply.stdout_lines
 
+# ── 7c.1: Populate operator-shared-pvc with PostgreSQL JDBC driver ────────────
+# operator-shared-pvc is created by the FNCM operator after the CR is applied
+# (not by deployoperator.py).  The ban-copy-jdbc init container copies the JAR
+# from /opt/ansible/share/jdbc/ into Liberty configDropins/overrides/.
+# Without it, ECMClientDS fails ("Data store is null") and Navigator crashes.
+# FNCM 5.7.0 removed the JAR from the install package so we download it here.
+
+- name: Wait for operator-shared-pvc to be created and bound
+  ansible.builtin.shell: >
+    oc get pvc operator-shared-pvc -n {{ fncm_namespace }}
+    -o jsonpath='{.status.phase}' 2>/dev/null || echo "NotFound"
+  register: pvc_phase
+  retries: 30
+  delay: 10
+  until: pvc_phase.stdout == "Bound"
+  changed_when: false
+
+- name: Delete any leftover JDBC init job from a prior run
+  kubernetes.core.k8s:
+    state: absent
+    api_version: batch/v1
+    kind: Job
+    name: fncm-jdbc-init
+    namespace: "{{ fncm_namespace }}"
+  failed_when: false
+
+- name: Create job to download PostgreSQL JDBC JAR into operator-shared-pvc
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: fncm-jdbc-init
+        namespace: "{{ fncm_namespace }}"
+      spec:
+        ttlSecondsAfterFinished: 300
+        template:
+          spec:
+            restartPolicy: OnFailure
+            containers:
+            - name: jdbc-init
+              image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+              command:
+              - sh
+              - -c
+              - |
+                set -e
+                JAR="{{ jdbc_postgres_jar }}"
+                URL="{{ jdbc_postgres_url }}"
+                SHARED=/opt/ansible/share/jdbc
+                microdnf install -y curl --nodocs --setopt=install_weak_deps=0 -q
+                mkdir -p "$SHARED"
+                if [ -f "$SHARED/$JAR" ]; then
+                  echo "JAR already present: $SHARED/$JAR"
+                else
+                  echo "Downloading $JAR from $URL ..."
+                  curl -fsSL -o "$SHARED/$JAR" "$URL"
+                  echo "Downloaded: $SHARED/$JAR"
+                fi
+              volumeMounts:
+              - name: operator-shared-folder
+                mountPath: /opt/ansible/share
+            volumes:
+            - name: operator-shared-folder
+              persistentVolumeClaim:
+                claimName: operator-shared-pvc
+
+- name: Wait for JDBC init job to complete
+  ansible.builtin.shell: >
+    oc wait job/fncm-jdbc-init -n {{ fncm_namespace }}
+    --for=condition=complete --timeout=180s
+  changed_when: false
+
 # ── 7d: Trigger reconciliation if operator was just restored ─────────────────
 
 - name: Trigger operator reconciliation via annotation (re-run path)
