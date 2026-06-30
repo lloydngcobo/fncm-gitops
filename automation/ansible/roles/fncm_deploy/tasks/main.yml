@@ -146,7 +146,7 @@
         restartPolicy: Never
         containers:
         - name: copy
-          image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+          image: "{{ ubi_image }}"
           command: ["sh", "-c", "mkdir -p /opt/ansible/share/jdbc && sleep 3600"]
           volumeMounts:
           - name: operator-shared-folder
